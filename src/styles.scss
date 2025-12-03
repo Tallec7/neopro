@@ -1,0 +1,38 @@
+@use '@material-design-icons/font';
+
+@use 'video.js/dist/video-js.css';
+
+@font-face {
+  font-family: 'Roboto';
+  src: url('./fonts/Roboto-VariableFont_wdth,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Roboto';
+  src: url('./fonts/Roboto-Italic-VariableFont_wdth,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+    font-family: Roboto, monospace;
+    background: #ececec;
+    color: #2a2a2a;
+    margin: 0;
+}
+
+h1 {
+    color: #8d8d8d;
+    padding: 15px 30px;
+    font-size: 2em;
+    text-align: center;
+    font-weight: bold;
+}

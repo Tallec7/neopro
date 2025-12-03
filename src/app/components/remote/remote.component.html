@@ -1,0 +1,35 @@
+<div class="header">
+    <button class="back" [class.visible]="selectedSubCategory" (click)="back()"><span class="material-icons">arrow_back_ios</span></button>
+    <h1>Télécommande</h1>
+</div>
+
+@if (!selectedSubCategory) {
+    <button class="video" (click)="launchSponsors()">
+        <span class="material-icons">video_camera_back</span>
+        Boucle partenaires
+    </button>
+}
+
+@for(category of !selectedSubCategory ? configuration.categories : selectedSubCategory?.subCategories; track $index) {
+    <button class="category" (click)="goToCategory(category)">
+        <span class="material-icons">folder</span>
+        <span class="title">{{ category.name }}</span>
+        <span class="sub">
+            @if (category.subCategories) {
+                {{ category.subCategories.length }} sous-dossiers
+            }
+            @if (category.subCategories && category.videos) { / }
+            @if (category.videos) {
+                {{ category.videos.length }} vidéos
+            }
+        </span>
+    </button>
+}
+
+
+@for(video of selectedSubCategory?.videos; track $index) {
+    <button class="video" (click)="launchVideo(video)">
+        <span class="material-icons">video_camera_back</span>
+        {{ video.name }}
+    </button>
+}
