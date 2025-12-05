@@ -95,8 +95,18 @@ wpa_passphrase=NouveauMotDePasse123
 ### 1.4 Redémarrer le service hostapd
 
 ```bash
+# Vérifier si le service est masked (problème courant)
+sudo systemctl status hostapd
+
+# Si vous voyez "Unit hostapd.service is masked", démasquer d'abord :
+sudo systemctl unmask hostapd
+sudo systemctl enable hostapd
+
+# Redémarrer le service
 sudo systemctl restart hostapd
 ```
+
+**Note :** Sur certaines versions de Raspberry Pi OS, le service `hostapd` est "masked" par défaut. Si vous obtenez l'erreur `Failed to restart hostapd.service: Unit hostapd.service is masked`, utilisez les commandes ci-dessus pour le démasquer.
 
 ### 1.5 Vérifier le nouveau SSID
 
@@ -307,7 +317,12 @@ EOF
 
 chown pi:pi /home/pi/neopro/club-config.json
 
-# 5. Redémarrer les services
+# 5. S'assurer que hostapd n'est pas masked
+echo "🔓 Vérification du service hostapd..."
+systemctl unmask hostapd 2>/dev/null || true
+systemctl enable hostapd 2>/dev/null || true
+
+# 6. Redémarrer les services
 echo "🔄 Redémarrage des services..."
 systemctl restart hostapd
 systemctl restart dnsmasq
@@ -405,6 +420,11 @@ sudo journalctl -u hostapd -n 50
 
 # Vérifier la configuration
 cat /etc/hostapd/hostapd.conf | grep ssid
+
+# Si le service est "masked" (masqué)
+sudo systemctl unmask hostapd
+sudo systemctl enable hostapd
+sudo systemctl start hostapd
 
 # Redémarrer complètement
 sudo systemctl restart hostapd dnsmasq
