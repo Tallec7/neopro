@@ -18,15 +18,9 @@ const getSslConfig = () => {
   }
 
   // For cloud providers (Render, Supabase, Neon, etc.) without explicit CA,
-  // rejectUnauthorized: false is acceptable as the connection is already on a trusted network.
-  // Set DATABASE_SSL_REJECT_UNAUTHORIZED=true for stricter validation if needed.
-  const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true';
-
-  if (!rejectUnauthorized) {
-    logger.warn('DATABASE_SSL_CA not set - using rejectUnauthorized: false for cloud provider compatibility');
-  }
-
-  return { rejectUnauthorized };
+  // rejectUnauthorized: false is required as their certificates are not in the system CA store.
+  logger.warn('DATABASE_SSL_CA not set - using rejectUnauthorized: false for cloud provider compatibility');
+  return { rejectUnauthorized: false };
 };
 
 const poolConfig: PoolConfig = {
