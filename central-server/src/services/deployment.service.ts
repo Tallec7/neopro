@@ -20,7 +20,8 @@ interface DeploymentRow {
 
 class DeploymentService {
   /**
-   * Démarre un déploiement de vidéo vers une cible (site ou groupe)
+   * Tente de démarrer un déploiement vers les sites connectés.
+   * Les sites non connectés recevront le déploiement quand ils se connecteront.
    */
   async startDeployment(deploymentId: string): Promise<void> {
     try {
@@ -39,14 +40,6 @@ class DeploymentService {
 
       const deployment = deploymentResult.rows[0] as unknown as DeploymentRow;
 
-      // Mettre le déploiement en cours
-      await query(
-        `UPDATE content_deployments
-         SET status = 'in_progress', started_at = NOW()
-         WHERE id = $1`,
-        [deploymentId]
-      );
-
       // Récupérer les sites cibles
       const targets = await this.getTargetSites(deployment.target_type, deployment.target_id);
 
@@ -60,52 +53,104 @@ class DeploymentService {
       const videoUrl = `${baseUrl}${deployment.storage_path}`;
       const videoTitle = deployment.metadata?.title || deployment.filename;
 
-      // Envoyer la commande de déploiement à chaque site
-      let successCount = 0;
-      let failedCount = 0;
+      // Tenter d'envoyer aux sites connectés
+      let connectedCount = 0;
 
       for (const target of targets) {
+        if (socketService.isConnected(target.siteId)) {
+          const success = await this.deployToSite(
+            deploymentId,
+            target.siteId,
+            deployment.video_id,
+            videoUrl,
+            videoTitle
+          );
+          if (success) {
+            connectedCount++;
+          }
+        }
+      }
+
+      // Si au moins un site est connecté, passer en in_progress
+      if (connectedCount > 0) {
+        await query(
+          `UPDATE content_deployments
+           SET status = 'in_progress', started_at = NOW()
+           WHERE id = $1`,
+          [deploymentId]
+        );
+      }
+      // Sinon, le déploiement reste en "pending" et sera traité quand les sites se connecteront
+
+      logger.info('Deployment initiated', {
+        deploymentId,
+        totalSites: targets.length,
+        connectedSites: connectedCount,
+        pendingSites: targets.length - connectedCount
+      });
+
+    } catch (error) {
+      logger.error('Error starting deployment:', error);
+      await this.failDeployment(deploymentId, error instanceof Error ? error.message : 'Erreur inconnue');
+    }
+  }
+
+  /**
+   * Traite les déploiements en attente pour un site qui vient de se connecter
+   */
+  async processPendingDeploymentsForSite(siteId: string): Promise<void> {
+    try {
+      // Récupérer les déploiements pending qui ciblent ce site (directement ou via un groupe)
+      const result = await query(
+        `SELECT cd.id, cd.video_id, v.filename, v.storage_path, v.metadata
+         FROM content_deployments cd
+         JOIN videos v ON cd.video_id = v.id
+         WHERE cd.status IN ('pending', 'in_progress')
+           AND (
+             (cd.target_type = 'site' AND cd.target_id = $1)
+             OR (cd.target_type = 'group' AND cd.target_id IN (
+               SELECT group_id FROM site_groups WHERE site_id = $1
+             ))
+           )`,
+        [siteId]
+      );
+
+      if (result.rows.length === 0) {
+        return;
+      }
+
+      logger.info('Processing pending deployments for site', {
+        siteId,
+        count: result.rows.length
+      });
+
+      const baseUrl = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3001';
+
+      for (const row of result.rows) {
+        const deployment = row as unknown as DeploymentRow;
+        const videoUrl = `${baseUrl}${deployment.storage_path}`;
+        const videoTitle = deployment.metadata?.title || deployment.filename;
+
         const success = await this.deployToSite(
-          deploymentId,
-          target.siteId,
+          deployment.id,
+          siteId,
           deployment.video_id,
           videoUrl,
           videoTitle
         );
 
         if (success) {
-          successCount++;
-        } else {
-          failedCount++;
+          // Passer en in_progress si c'était pending
+          await query(
+            `UPDATE content_deployments
+             SET status = 'in_progress', started_at = COALESCE(started_at, NOW())
+             WHERE id = $1 AND status = 'pending'`,
+            [deployment.id]
+          );
         }
       }
-
-      // Mettre à jour le progress initial
-      const totalCount = targets.length;
-      const progress = totalCount > 0 ? Math.round((successCount / totalCount) * 100) : 0;
-
-      await query(
-        `UPDATE content_deployments
-         SET progress = $1
-         WHERE id = $2`,
-        [progress, deploymentId]
-      );
-
-      // Si tous ont échoué, marquer comme échoué
-      if (successCount === 0 && failedCount > 0) {
-        await this.failDeployment(deploymentId, 'Aucun site connecté pour recevoir le déploiement');
-      }
-
-      logger.info('Deployment started', {
-        deploymentId,
-        totalSites: totalCount,
-        successCount,
-        failedCount
-      });
-
     } catch (error) {
-      logger.error('Error starting deployment:', error);
-      await this.failDeployment(deploymentId, error instanceof Error ? error.message : 'Erreur inconnue');
+      logger.error('Error processing pending deployments for site:', { siteId, error });
     }
   }
 

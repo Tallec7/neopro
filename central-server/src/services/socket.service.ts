@@ -5,6 +5,16 @@ import { query } from '../config/database';
 import { SocketData, CommandMessage, CommandResult, HeartbeatMessage } from '../types';
 import logger from '../config/logger';
 
+// Import différé pour éviter les dépendances circulaires
+let deploymentService: { processPendingDeploymentsForSite: (siteId: string) => Promise<void> } | null = null;
+const getDeploymentService = async () => {
+  if (!deploymentService) {
+    const module = await import('./deployment.service');
+    deploymentService = module.default;
+  }
+  return deploymentService;
+};
+
 const secureCompare = (a: string, b: string): boolean => {
   if (a.length !== b.length) return false;
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -109,6 +119,18 @@ class SocketService {
     });
 
     logger.info('Agent authenticated', { siteId, siteName: site.site_name });
+
+    // Traiter les déploiements en attente pour ce site
+    this.processPendingDeployments(siteId);
+  }
+
+  private async processPendingDeployments(siteId: string) {
+    try {
+      const service = await getDeploymentService();
+      await service.processPendingDeploymentsForSite(siteId);
+    } catch (error) {
+      logger.error('Error processing pending deployments on connect:', { siteId, error });
+    }
   }
 
   private handleDisconnection(socket: Socket) {
