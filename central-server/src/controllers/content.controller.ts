@@ -151,7 +151,7 @@ export const getDeployments = async (req: AuthRequest, res: Response) => {
       `SELECT cd.id, cd.video_id, cd.target_type, cd.target_id, cd.status, cd.progress,
               cd.error_message as error, cd.completed_at as deployed_at,
               cd.created_at, cd.started_at,
-              v.filename as video_name,
+              v.filename, v.original_name, v.metadata,
               CASE
                 WHEN cd.target_type = 'site' THEN s.site_name
                 WHEN cd.target_type = 'group' THEN g.name
@@ -163,7 +163,13 @@ export const getDeployments = async (req: AuthRequest, res: Response) => {
        ORDER BY cd.created_at DESC`
     );
 
-    res.json(result.rows);
+    // Ajouter video_title depuis metadata
+    const deployments = result.rows.map(d => ({
+      ...d,
+      video_title: (d.metadata as { title?: string })?.title || d.original_name || d.filename
+    }));
+
+    res.json(deployments);
   } catch (error) {
     logger.error('Error fetching deployments:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des déploiements' });
