@@ -37,7 +37,12 @@ ssh pi@raspberrypi.local
 sudo ./install.sh MONCLUB MotDePasseWiFi123
 ```
 
-Ce script installe : Node.js, nginx, hostapd, dnsmasq, services systemd, WiFi AP.
+Ce script :
+- Vérifie les prérequis (connexion Internet, espace disque)
+- Installe Node.js, nginx, hostapd, dnsmasq
+- Configure les services systemd (neopro-app, neopro-admin, **neopro-sync-agent**)
+- Configure le WiFi hotspot
+- Affiche la durée totale d'installation
 
 #### Étape 2 : Configuration du club (sur Mac)
 
@@ -47,9 +52,11 @@ Ce script installe : Node.js, nginx, hostapd, dnsmasq, services systemd, WiFi AP
 
 Ce script :
 - Collecte les infos du club (nom, ville, mot de passe...)
-- Crée la configuration
-- Build l'application
-- Déploie sur le Pi
+- Crée la configuration dans `raspberry/config/templates/`
+- Teste la connexion SSH au Pi
+- Build et déploie l'application (réutilise `build-and-deploy.sh`)
+- Configure le hotspot WiFi avec le nom du club
+- Configure le sync-agent pour le serveur central
 
 ---
 
@@ -62,10 +69,14 @@ npm run deploy:raspberry
 ```
 
 Cette commande :
-1. Compile l'application Angular
-2. Crée l'archive de déploiement
-3. L'envoie sur le Pi via SSH
-4. Installe et redémarre les services
+1. Vérifie les prérequis (Node.js, npm, Angular CLI)
+2. Compile l'application Angular (skip npm install si pas nécessaire)
+3. Crée l'archive de déploiement
+4. Crée un backup de la version actuelle sur le Pi
+5. L'envoie sur le Pi via SSH
+6. Redémarre tous les services (neopro-app, nginx, sync-agent)
+7. Vérifie que les services sont actifs
+8. Affiche la durée totale
 
 **Options :**
 ```bash
