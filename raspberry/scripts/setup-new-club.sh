@@ -365,16 +365,18 @@ setup_sync_agent() {
     # Étape 2: Enregistrer le site sur le serveur central
     print_info "Enregistrement du site sur le serveur central..."
 
-    # Échapper les caractères spéciaux pour le shell
-    ESCAPED_PASSWORD=$(printf '%s' "$ADMIN_PASSWORD" | sed "s/'/'\\\\''/g")
+    # Échapper les caractères spéciaux pour le shell (simple quotes)
+    ESCAPED_ADMIN_PASSWORD=$(printf '%s' "$ADMIN_PASSWORD" | sed "s/'/'\\\\''/g")
     ESCAPED_SITE_NAME=$(printf '%s' "$SITE_NAME" | sed "s/'/'\\\\''/g")
     ESCAPED_CLUB_NAME=$(printf '%s' "$CLUB_FULL_NAME" | sed "s/'/'\\\\''/g")
 
-    # Exécuter register-site.js avec les variables d'environnement
-    # Le script détecte SITE_NAME et CLUB_NAME et utilise le mode non-interactif
+    # Exécuter register-site.js avec toutes les variables d'environnement
+    # Y compris ADMIN_EMAIL et ADMIN_PASSWORD pour éviter les prompts interactifs
     ssh pi@"$PI_ADDRESS" "
         cd /home/pi/neopro/sync-agent
         export CENTRAL_SERVER_URL='https://neopro-central.onrender.com'
+        export ADMIN_EMAIL='${ADMIN_EMAIL}'
+        export ADMIN_PASSWORD='${ESCAPED_ADMIN_PASSWORD}'
         export SITE_NAME='${ESCAPED_SITE_NAME}'
         export CLUB_NAME='${ESCAPED_CLUB_NAME}'
         export LOCATION_CITY='${CITY}'
@@ -382,9 +384,7 @@ setup_sync_agent() {
         export LOCATION_COUNTRY='${COUNTRY}'
         export SPORTS='${SPORTS}'
 
-        # Le script attend email et password sur stdin en mode interactif
-        # Mais comme les env vars sont définies, il n'a besoin que des credentials
-        printf '%s\n%s\n' '${ADMIN_EMAIL}' '${ESCAPED_PASSWORD}' | sudo -E node scripts/register-site.js
+        sudo -E node scripts/register-site.js
     "
 
     # Étape 3: Installer le service systemd
