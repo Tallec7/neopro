@@ -298,6 +298,29 @@ build_and_deploy() {
         print_error "Échec du build ou déploiement"
         exit 1
     fi
+
+    # Configurer le hotspot WiFi avec le nom du club
+    print_step "Configuration du hotspot WiFi"
+
+    # Vérifier si hostapd est installé
+    if ssh -o ConnectTimeout=10 pi@"$PI_ADDRESS" "systemctl is-active hostapd >/dev/null 2>&1"; then
+        print_info "Mise à jour du SSID WiFi vers NEOPRO-$CLUB_NAME..."
+        ssh pi@"$PI_ADDRESS" "
+            sudo sed -i 's/^ssid=.*/ssid=NEOPRO-$CLUB_NAME/' /etc/hostapd/hostapd.conf
+            sudo systemctl restart hostapd
+        "
+        if [ $? -eq 0 ]; then
+            print_success "Hotspot WiFi configuré : NEOPRO-$CLUB_NAME"
+            WIFI_CONFIGURED=true
+        else
+            print_warning "Échec de la configuration du hotspot"
+            WIFI_CONFIGURED=false
+        fi
+    else
+        print_warning "hostapd n'est pas actif sur ce Pi"
+        print_info "Le hotspot WiFi NEOPRO-$CLUB_NAME ne sera pas disponible"
+        WIFI_CONFIGURED=false
+    fi
 }
 
 ################################################################################
