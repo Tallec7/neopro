@@ -161,9 +161,10 @@ cd /path/to/neopro
 - Adresse du Pi (neopro.local)
 
 **Ce que fait le script :**
-- ✅ Crée la configuration dans `raspberry/configs/NANTES-configuration.json`
+- ✅ Crée la configuration dans `raspberry/config/templates/NANTES-configuration.json`
 - ✅ Build l'application Angular avec cette config
 - ✅ Déploie sur le Pi via SSH
+- ✅ Configure le hotspot WiFi (SSID `NEOPRO-NANTES`)
 - ✅ Configure le sync-agent pour le serveur central
 - ✅ Affiche un résumé complet
 

@@ -144,10 +144,11 @@ sudo ./install.sh CESSON MyWiFiPass123
 
 **Ce qu'il fait (interactif) :**
 1. Demande les informations du club
-2. Crée `raspberry/configs/CLUB-configuration.json`
+2. Crée `raspberry/config/templates/CLUB-configuration.json`
 3. Build l'application Angular
 4. Déploie sur le Pi
-5. Configure le sync-agent
+5. Configure le hotspot WiFi (SSID `NEOPRO-CLUB`)
+6. Configure le sync-agent (connexion au serveur central)
 
 ---
 
@@ -289,7 +290,7 @@ ssh pi@neopro.local 'sudo systemctl restart neopro-app nginx'
 
 ### Organisation
 
-- Créez une configuration par club dans `raspberry/configs/`
+- Créez une configuration par club dans `raspberry/config/templates/`
 - Documentez les mots de passe dans un gestionnaire sécurisé (hors Git)
 - Gardez un tableau de suivi des clubs déployés
 
