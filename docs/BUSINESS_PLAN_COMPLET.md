@@ -1,7 +1,7 @@
 # NEOPRO - Business Plan & Roadmap Technique Complète
 
 > **Document de référence pour investisseurs, CTO et COO**
-> Version 1.0 - 6 Décembre 2025
+> Version 1.3 - 8 Décembre 2025
 > Classification : Confidentiel
 
 ---
@@ -73,11 +73,14 @@ Les solutions existantes sont soit trop chères (€500-2000+), soit trop comple
 - ✅ **Stack moderne** - Angular 20, Node.js, PostgreSQL, Socket.IO
 - ✅ **Architecture scalable** - Fleet management cloud-native
 - ✅ **Marché fragmenté** - Peu de concurrence directe sur le segment amateur
+- ✅ **Analytics complet** - Dashboard club avec métriques usage/santé (ajouté 6 déc)
+- ✅ **Éditeur de config avancé** - Historique, diff, timeCategories (ajouté 8 déc)
+- ✅ **CRUD vidéos inline** - Gestion complète depuis le dashboard central (ajouté 8 déc)
 
 ## 1.6 Points d'Attention
 
-- ⚠️ **0 tests automatisés** - Dette technique à résorber
-- ⚠️ **Pas de CI/CD** - Pipeline à mettre en place
+- ⚠️ **0 tests automatisés** - Dette technique prioritaire à résorber
+- ⚠️ **Pas de CI/CD** - Pipeline GitHub Actions à mettre en place
 - ✅ **Vulnérabilités sécurité** - 4/5 corrections critiques effectuées (reste HttpOnly cookies)
 - ⚠️ **Équipe à construire** - Recrutements clés en Phase 1
 
@@ -218,6 +221,11 @@ Les solutions existantes sont soit trop chères (€500-2000+), soit trop comple
 | Déploiement contenu | ✅ | Push vidéos vers sites |
 | Mises à jour OTA | ✅ | Avec rollback automatique |
 | Gestion utilisateurs | ✅ | Admin, operator, viewer |
+| **Analytics Club** | ✅ | Dashboard usage, santé, export CSV (6 déc) |
+| **Éditeur config avancé** | ✅ | Historique, diff, timeCategories (8 déc) |
+| **CRUD vidéos inline** | ✅ | Ajouter/modifier/supprimer depuis dashboard (8 déc) |
+| **Upload fichiers** | ✅ | Multer avec gestion multipart (7 déc) |
+| **Toast notifications** | ✅ | Remplace alert() natifs (6 déc) |
 
 ### À Développer (Phase 2+)
 
@@ -536,12 +544,14 @@ Situation actuelle:
 
 | Critère | Note | Commentaire |
 |---------|------|-------------|
-| Fonctionnalité | 8/10 | Produit complet et utilisable |
+| Fonctionnalité | **9/10** | Produit complet avec analytics, éditeur config, CRUD vidéos |
 | Qualité code | 5/10 | Lisible mais sans tests |
 | Sécurité | 7/10 | Vulnérabilités critiques corrigées, reste HttpOnly cookies |
 | Scalabilité | 6/10 | Architecture OK, infra à renforcer |
 | Maintenabilité | 5/10 | Doc OK, mais pas de tests ni CI |
-| **GLOBAL** | **6.2/10** | **Produit viable avec fondations sécurité solides** |
+| **GLOBAL** | **6.4/10** | **Produit fonctionnel complet, dette technique à résorber** |
+
+> **Mise à jour 8 décembre 2025 :** Note fonctionnalité augmentée (8→9) suite à l'ajout des analytics club, éditeur de configuration avancé avec timeCategories, et CRUD vidéos inline.
 
 ---
 
@@ -2413,9 +2423,11 @@ SEMAINE 2: AUTONOMIE
 ---
 
 **Document préparé par :** Analyse Claude Code
-**Version :** 1.2
-**Date :** 6 Décembre 2025
-**Mise à jour :** Ajout sections Analytics Sponsors (13) et Analytics Club (14)
+**Version :** 1.3
+**Date :** 8 Décembre 2025
+**Mise à jour :**
+- v1.3 (8 déc) : Ajout fonctionnalités réalisées (analytics, éditeur config, CRUD vidéos, timeCategories), réévaluation note globale
+- v1.2 (6 déc) : Ajout sections Analytics Sponsors (13) et Analytics Club (14)
 **Classification :** Confidentiel
 
 ---
