@@ -79,9 +79,9 @@ Les solutions existantes sont soit trop chères (€500-2000+), soit trop comple
 
 ## 1.6 Points d'Attention
 
-- ✅ **224 tests automatisés** - Couverture ~67% backend (ajouté 8 déc)
+- ✅ **230 tests automatisés** - Couverture ~67% backend (ajouté 8 déc)
 - ✅ **CI/CD configuré** - GitHub Actions avec tests automatiques (ajouté 8 déc)
-- ✅ **Vulnérabilités sécurité** - 4/5 corrections critiques effectuées (reste HttpOnly cookies)
+- ✅ **Vulnérabilités sécurité** - 5/5 corrections critiques effectuées (HttpOnly cookies ajouté 8 déc)
 - ⚠️ **Équipe à construire** - Recrutements clés en Phase 1
 
 ---
@@ -543,7 +543,7 @@ Situation actuelle:
 | ~~JWT secret par défaut~~ | `central-server/src/middleware/auth.ts:6` | ~~🔴 CRITIQUE~~ | ✅ CORRIGÉ - Erreur si JWT_SECRET manquant |
 | ~~TLS désactivé~~ | `central-server/src/config/database.ts:11-28` | ~~🔴 CRITIQUE~~ | ✅ CORRIGÉ - TLS activé en production, CA configurable |
 | ~~Credentials admin en dur~~ | `central-server/src/scripts/init-db.sql` | ~~🔴 CRITIQUE~~ | ✅ CORRIGÉ - Script `npm run create-admin` sécurisé |
-| Token localStorage | `central-dashboard/src/app/core/services/auth.service.ts:26` | 🟠 HAUTE | ⏳ À migrer vers HttpOnly cookies |
+| ~~Token localStorage~~ | `central-server/src/controllers/auth.controller.ts` | ~~🟠 HAUTE~~ | ✅ CORRIGÉ - HttpOnly cookies implémentés |
 | ~~API key non hashée~~ | `central-server/src/services/socket.service.ts:68-71` | ~~🟠 HAUTE~~ | ✅ CORRIGÉ - SHA256 hash + timing-safe compare |
 
 ### 4.2.4 Autres Problèmes
@@ -561,12 +561,16 @@ Situation actuelle:
 | Critère | Note | Commentaire |
 |---------|------|-------------|
 | Fonctionnalité | **9/10** | Produit complet avec analytics, éditeur config, CRUD vidéos |
-| Qualité code | **7/10** | 224 tests, 67% couverture, 94% sur controllers |
-| Sécurité | 7/10 | Vulnérabilités critiques corrigées, reste HttpOnly cookies |
-| Scalabilité | 6/10 | Architecture OK, infra à renforcer |
+| Qualité code | **7/10** | 230 tests, 67% couverture, 94% sur controllers |
+| Sécurité | **8/10** | HttpOnly cookies, JWT sécurisé, headers Helmet |
+| Scalabilité | 6/10 | Architecture OK, infra à renforcer (Redis) |
 | Maintenabilité | **8/10** | Doc complète, tests solides, CI/CD opérationnel |
-| **GLOBAL** | **7.4/10** | **Produit fonctionnel complet, dette technique largement résorbée** |
+| **GLOBAL** | **7.6/10** | **Produit fonctionnel complet, dette technique largement résorbée** |
 
+> **Mise à jour 8 décembre 2025 (v1.5) :**
+> - Note sécurité augmentée (7→8) : HttpOnly cookies implémentés pour JWT
+> - Note globale augmentée (7.4→7.6)
+>
 > **Mise à jour 8 décembre 2025 (v1.4) :**
 > - Note qualité code augmentée (5→7) : 224 tests unitaires ajoutés avec 67% couverture globale
 > - Note maintenabilité augmentée (5→8) : Base de tests solide + CI/CD GitHub Actions opérationnel
@@ -664,7 +668,7 @@ central-server/src/
 
 | Jour | Tâche | Livrable |
 |------|-------|----------|
-| 1-2 | Migrer JWT vers HttpOnly cookies | PR merged |
+| ~~1-2~~ | ~~Migrer JWT vers HttpOnly cookies~~ | ✅ FAIT - 8 déc 2025 |
 | 3 | Hasher API keys en base | Migration DB + code |
 | 4 | Rate limiting par utilisateur | Config améliorée |
 | 5 | npm audit clean | 0 vulnérabilités high/critical |

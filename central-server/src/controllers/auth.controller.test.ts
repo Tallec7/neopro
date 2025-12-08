@@ -15,6 +15,8 @@ const createMockResponse = (): Response => {
   const res: Partial<Response> = {
     status: jest.fn().mockReturnThis(),
     json: jest.fn().mockReturnThis(),
+    cookie: jest.fn().mockReturnThis(),
+    clearCookie: jest.fn().mockReturnThis(),
   };
   return res as Response;
 };
@@ -88,6 +90,29 @@ describe('Auth Controller', () => {
       );
     });
 
+    it('should set HttpOnly cookie on successful login', async () => {
+      const req = {
+        body: { email: 'test@example.com', password: 'correctpassword' },
+      } as Request;
+      const res = createMockResponse();
+
+      (query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [mockUser] })
+        .mockResolvedValueOnce({ rows: [] });
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
+
+      await login(req, res);
+
+      expect(res.cookie).toHaveBeenCalledWith(
+        'neopro_token',
+        expect.any(String),
+        expect.objectContaining({
+          httpOnly: true,
+          path: '/',
+        })
+      );
+    });
+
     it('should return 500 on database error', async () => {
       const req = {
         body: { email: 'test@example.com', password: 'password' },
@@ -113,6 +138,17 @@ describe('Auth Controller', () => {
       await logout(req, res);
 
       expect(res.json).toHaveBeenCalledWith({ message: 'Déconnexion réussie' });
+    });
+
+    it('should clear the cookie on logout', async () => {
+      const req = {
+        user: { id: '123', email: 'test@example.com', role: 'admin' },
+      } as AuthRequest;
+      const res = createMockResponse();
+
+      await logout(req, res);
+
+      expect(res.clearCookie).toHaveBeenCalledWith('neopro_token', { path: '/' });
     });
   });
 

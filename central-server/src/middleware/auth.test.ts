@@ -4,8 +4,9 @@ import { authenticate, requireRole, generateToken, JwtPayload } from './auth';
 import { AuthRequest } from '../types';
 
 // Helper to create mock request
-const createMockRequest = (authHeader?: string): AuthRequest => ({
-  headers: authHeader ? { authorization: authHeader } : {},
+const createMockRequest = (options?: { authHeader?: string; cookies?: Record<string, string> }): AuthRequest => ({
+  headers: options?.authHeader ? { authorization: options.authHeader } : {},
+  cookies: options?.cookies || {},
   user: undefined,
 } as AuthRequest);
 
@@ -53,7 +54,7 @@ describe('Auth Middleware', () => {
   });
 
   describe('authenticate', () => {
-    it('should return 401 if no authorization header', () => {
+    it('should return 401 if no authorization header and no cookie', () => {
       const req = createMockRequest();
       const res = createMockResponse();
       const next: NextFunction = jest.fn();
@@ -66,7 +67,7 @@ describe('Auth Middleware', () => {
     });
 
     it('should return 401 if authorization header does not start with Bearer', () => {
-      const req = createMockRequest('Basic some-token');
+      const req = createMockRequest({ authHeader: 'Basic some-token' });
       const res = createMockResponse();
       const next: NextFunction = jest.fn();
 
@@ -77,8 +78,8 @@ describe('Auth Middleware', () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('should return 401 for invalid token', () => {
-      const req = createMockRequest('Bearer invalid-token');
+    it('should return 401 for invalid token in header', () => {
+      const req = createMockRequest({ authHeader: 'Bearer invalid-token' });
       const res = createMockResponse();
       const next: NextFunction = jest.fn();
 
@@ -89,9 +90,9 @@ describe('Auth Middleware', () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('should call next and set user for valid token', () => {
+    it('should call next and set user for valid token in header', () => {
       const token = generateToken(testPayload);
-      const req = createMockRequest(`Bearer ${token}`);
+      const req = createMockRequest({ authHeader: `Bearer ${token}` });
       const res = createMockResponse();
       const next: NextFunction = jest.fn();
 
@@ -107,7 +108,7 @@ describe('Auth Middleware', () => {
     it('should return 401 for expired token', () => {
       // Create an expired token
       const expiredToken = jwt.sign(testPayload, process.env.JWT_SECRET!, { expiresIn: '-1h' });
-      const req = createMockRequest(`Bearer ${expiredToken}`);
+      const req = createMockRequest({ authHeader: `Bearer ${expiredToken}` });
       const res = createMockResponse();
       const next: NextFunction = jest.fn();
 
@@ -116,6 +117,59 @@ describe('Auth Middleware', () => {
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({ error: 'Token invalide ou expiré' });
       expect(next).not.toHaveBeenCalled();
+    });
+
+    // Tests pour les cookies HttpOnly
+    it('should authenticate with valid token in cookie', () => {
+      const token = generateToken(testPayload);
+      const req = createMockRequest({ cookies: { neopro_token: token } });
+      const res = createMockResponse();
+      const next: NextFunction = jest.fn();
+
+      authenticate(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(req.user).toBeDefined();
+      expect(req.user?.id).toBe(testPayload.id);
+    });
+
+    it('should return 401 for invalid token in cookie', () => {
+      const req = createMockRequest({ cookies: { neopro_token: 'invalid-token' } });
+      const res = createMockResponse();
+      const next: NextFunction = jest.fn();
+
+      authenticate(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({ error: 'Token invalide ou expiré' });
+    });
+
+    it('should prioritize cookie over header', () => {
+      const cookieToken = generateToken({ ...testPayload, email: 'cookie@example.com' });
+      const headerToken = generateToken({ ...testPayload, email: 'header@example.com' });
+      const req = createMockRequest({
+        cookies: { neopro_token: cookieToken },
+        authHeader: `Bearer ${headerToken}`,
+      });
+      const res = createMockResponse();
+      const next: NextFunction = jest.fn();
+
+      authenticate(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(req.user?.email).toBe('cookie@example.com');
+    });
+
+    it('should fallback to header if cookie is missing', () => {
+      const token = generateToken(testPayload);
+      const req = createMockRequest({ authHeader: `Bearer ${token}` });
+      const res = createMockResponse();
+      const next: NextFunction = jest.fn();
+
+      authenticate(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(req.user?.email).toBe(testPayload.email);
     });
   });
 
