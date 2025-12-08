@@ -80,7 +80,7 @@ Les solutions existantes sont soit trop chères (€500-2000+), soit trop comple
 ## 1.6 Points d'Attention
 
 - ✅ **224 tests automatisés** - Couverture ~67% backend (ajouté 8 déc)
-- ⚠️ **Pas de CI/CD** - Pipeline GitHub Actions à mettre en place
+- ✅ **CI/CD configuré** - GitHub Actions avec tests automatiques (ajouté 8 déc)
 - ✅ **Vulnérabilités sécurité** - 4/5 corrections critiques effectuées (reste HttpOnly cookies)
 - ⚠️ **Équipe à construire** - Recrutements clés en Phase 1
 
@@ -564,13 +564,13 @@ Situation actuelle:
 | Qualité code | **7/10** | 224 tests, 67% couverture, 94% sur controllers |
 | Sécurité | 7/10 | Vulnérabilités critiques corrigées, reste HttpOnly cookies |
 | Scalabilité | 6/10 | Architecture OK, infra à renforcer |
-| Maintenabilité | **7/10** | Doc OK, tests solides, CI à finaliser |
-| **GLOBAL** | **7.2/10** | **Produit fonctionnel complet, dette technique largement résorbée** |
+| Maintenabilité | **8/10** | Doc complète, tests solides, CI/CD opérationnel |
+| **GLOBAL** | **7.4/10** | **Produit fonctionnel complet, dette technique largement résorbée** |
 
 > **Mise à jour 8 décembre 2025 (v1.4) :**
 > - Note qualité code augmentée (5→7) : 224 tests unitaires ajoutés avec 67% couverture globale
-> - Note maintenabilité augmentée (5→7) : Base de tests solide pour la CI
-> - Note globale augmentée (6.4→7.2)
+> - Note maintenabilité augmentée (5→8) : Base de tests solide + CI/CD GitHub Actions opérationnel
+> - Note globale augmentée (6.4→7.4)
 
 ---
 
@@ -705,7 +705,7 @@ central-server/src/
 
 | Livrable | Critère d'acceptation | Statut |
 |----------|----------------------|--------|
-| Pipeline CI/CD | Build + lint + test sur chaque PR | ⏳ En cours |
+| Pipeline CI/CD | Build + test sur chaque PR | ✅ GitHub Actions |
 | Couverture tests | > 60% backend, > 40% frontend | ✅ 67% backend |
 | Sécurité | 0 vulnérabilité OWASP critical/high | ✅ 4/5 corrigées |
 | Monitoring | Logs centralisés + alertes Slack | ⏳ À faire |
