@@ -7,9 +7,21 @@ import {
   deleteSite,
   regenerateApiKey,
   getSiteStats,
+  getSiteMetrics,
+  sendCommand,
+  getCommandStatus,
 } from './sites.controller';
 import { query } from '../config/database';
 import { AuthRequest } from '../types';
+
+// Mock socket service
+const mockSocketService = {
+  isConnected: jest.fn(),
+  sendCommand: jest.fn(),
+};
+jest.mock('../services/socket.service', () => ({
+  default: mockSocketService,
+}));
 
 // Helper to create mock response
 const createMockResponse = (): Response => {
@@ -32,6 +44,8 @@ const createAuthRequest = (overrides: Partial<AuthRequest> = {}): AuthRequest =>
 describe('Sites Controller', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSocketService.isConnected.mockReset();
+    mockSocketService.sendCommand.mockReset();
   });
 
   describe('getSites', () => {
@@ -354,6 +368,271 @@ describe('Sites Controller', () => {
       await getSiteStats(req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('getSites - additional filters', () => {
+    it('should filter sites by sport', async () => {
+      const req = createAuthRequest({ query: { sport: 'volleyball' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockResolvedValueOnce({ rows: [] });
+
+      await getSites(req, res);
+
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('sports @>'),
+        [JSON.stringify(['volleyball'])]
+      );
+    });
+
+    it('should filter sites by region', async () => {
+      const req = createAuthRequest({ query: { region: 'Ile-de-France' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockResolvedValueOnce({ rows: [] });
+
+      await getSites(req, res);
+
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining("location->>'region'"),
+        ['Ile-de-France']
+      );
+    });
+
+    it('should combine multiple filters', async () => {
+      const req = createAuthRequest({
+        query: { status: 'online', sport: 'basketball', search: 'club' },
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockResolvedValueOnce({ rows: [] });
+
+      await getSites(req, res);
+
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('AND status'),
+        expect.arrayContaining(['online', JSON.stringify(['basketball']), '%club%'])
+      );
+    });
+  });
+
+  describe('getSite - error handling', () => {
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest({ params: { id: 'site-123' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await getSite(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('createSite - suffix handling', () => {
+    it('should increment suffix when multiple duplicates exist', async () => {
+      const req = createAuthRequest({
+        body: { site_name: 'Site', club_name: 'Club' },
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock)
+        .mockResolvedValueOnce({
+          rows: [
+            { site_name: 'Site' },
+            { site_name: 'Site-1' },
+            { site_name: 'Site-2' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ id: 'new-id', site_name: 'Site-3' }],
+        });
+
+      await createSite(req, res);
+
+      expect(query).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.arrayContaining(['Site-3'])
+      );
+    });
+  });
+
+  describe('updateSite - additional fields', () => {
+    it('should update location and sports', async () => {
+      const req = createAuthRequest({
+        params: { id: 'site-123' },
+        body: {
+          club_name: 'New Club',
+          location: { city: 'Lyon', region: 'Auvergne' },
+          sports: ['handball', 'basketball'],
+        },
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockResolvedValueOnce({
+        rows: [{ id: 'site-123', club_name: 'New Club' }],
+      });
+
+      await updateSite(req, res);
+
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('club_name'),
+        expect.arrayContaining([
+          'New Club',
+          JSON.stringify({ city: 'Lyon', region: 'Auvergne' }),
+          JSON.stringify(['handball', 'basketball']),
+        ])
+      );
+    });
+
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest({
+        params: { id: 'site-123' },
+        body: { site_name: 'New Name' },
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await updateSite(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('deleteSite - error handling', () => {
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest({ params: { id: 'site-123' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await deleteSite(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('regenerateApiKey - error handling', () => {
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest({ params: { id: 'site-123' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await regenerateApiKey(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('getSiteMetrics', () => {
+    it('should return metrics for a site', async () => {
+      const req = createAuthRequest({
+        params: { id: 'site-123' },
+        query: { hours: '12' },
+      });
+      const res = createMockResponse();
+
+      const mockMetrics = [
+        { cpu_usage: 45, memory_usage: 60, recorded_at: new Date() },
+      ];
+      (query as jest.Mock).mockResolvedValueOnce({ rows: mockMetrics });
+
+      await getSiteMetrics(req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        site_id: 'site-123',
+        period_hours: '12',
+        metrics: mockMetrics,
+      });
+    });
+
+    it('should use default 24 hours if not specified', async () => {
+      const req = createAuthRequest({
+        params: { id: 'site-123' },
+        query: {},
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockResolvedValueOnce({ rows: [] });
+
+      await getSiteMetrics(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ period_hours: 24 })
+      );
+    });
+
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest({ params: { id: 'site-123' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await getSiteMetrics(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('sendCommand', () => {
+    it('should return 400 if command is missing', async () => {
+      const req = createAuthRequest({
+        params: { id: 'site-123' },
+        body: {},
+      });
+      const res = createMockResponse();
+
+      await sendCommand(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: 'Commande requise' });
+    });
+
+    it('should return 404 if site not found', async () => {
+      const req = createAuthRequest({
+        params: { id: 'nonexistent' },
+        body: { command: 'restart' },
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockResolvedValueOnce({ rows: [] });
+
+      await sendCommand(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest({
+        params: { id: 'site-123' },
+        body: { command: 'restart' },
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await sendCommand(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('getCommandStatus', () => {
+    it('should return 404 if command not found', async () => {
+      const req = createAuthRequest({
+        params: { id: 'site-123', commandId: 'nonexistent' },
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockResolvedValueOnce({ rows: [] });
+
+      await getCommandStatus(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ error: 'Commande non trouvée' });
     });
   });
 });

@@ -6,6 +6,11 @@ import {
   recordVideoPlays,
   manageSession,
   exportClubData,
+  getClubUsage,
+  getClubContent,
+  getClubDashboard,
+  calculateDailyStats,
+  getAnalyticsOverview,
 } from './analytics.controller';
 import { query } from '../config/database';
 import { AuthRequest } from '../types';
@@ -414,6 +419,338 @@ describe('Analytics Controller', () => {
       (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
 
       await exportClubData(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('getClubUsage', () => {
+    it('should return usage statistics', async () => {
+      const req = createAuthRequest({
+        params: { siteId: 'site-123' },
+        query: {},
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock)
+        .mockResolvedValueOnce({
+          rows: [{
+            screen_time_seconds: '3600',
+            videos_played: '50',
+            sessions_count: '5',
+            active_days: '10',
+            manual_triggers: '20',
+            auto_plays: '30',
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{
+            screen_time_seconds: '3000',
+            videos_played: '40',
+            sessions_count: '4',
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ date: '2025-12-01', screen_time: '1800', videos: '25' }],
+        });
+
+      await getClubUsage(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          site_id: 'site-123',
+          summary: expect.objectContaining({
+            videos_played: 50,
+            screen_time_seconds: 3600,
+          }),
+        })
+      );
+    });
+
+    it('should use custom date range', async () => {
+      const req = createAuthRequest({
+        params: { siteId: 'site-123' },
+        query: { from: '2025-01-01', to: '2025-01-31' },
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{ screen_time_seconds: '0', videos_played: '0', sessions_count: '0', active_days: '0', manual_triggers: '0', auto_plays: '0' }] })
+        .mockResolvedValueOnce({ rows: [{ screen_time_seconds: '0', videos_played: '0', sessions_count: '0' }] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      await getClubUsage(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          period: expect.stringContaining('2025-01-01'),
+        })
+      );
+    });
+
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest({ params: { siteId: 'site-123' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await getClubUsage(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('getClubContent', () => {
+    it('should return content analytics', async () => {
+      const req = createAuthRequest({
+        params: { siteId: 'site-123' },
+        query: {},
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock)
+        .mockResolvedValueOnce({
+          rows: [
+            { category: 'sponsors', plays: '30', total_duration: '1800' },
+            { category: 'jingles', plays: '20', total_duration: '600' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { video_filename: 'video1.mp4', category: 'sponsors', plays: '15', total_duration: '900', completed_count: '10' },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ avg_completion: '85.5' }] });
+
+      await getClubContent(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          site_id: 'site-123',
+          by_category: expect.objectContaining({
+            sponsors: expect.objectContaining({ plays: 30 }),
+          }),
+          top_videos: expect.any(Array),
+          completion_rate: 85.5,
+        })
+      );
+    });
+
+    it('should handle null completion rate', async () => {
+      const req = createAuthRequest({ params: { siteId: 'site-123' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ avg_completion: null }] });
+
+      await getClubContent(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          completion_rate: null,
+        })
+      );
+    });
+
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest({ params: { siteId: 'site-123' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await getClubContent(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('getClubDashboard', () => {
+    it('should return complete dashboard data', async () => {
+      const req = createAuthRequest({
+        params: { siteId: 'site-123' },
+        query: {},
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock)
+        .mockResolvedValueOnce({
+          rows: [{ status: 'online', last_seen_at: new Date(), cpu_usage: 45, memory_usage: 60, temperature: 55, disk_usage: 30 }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ screen_time_seconds: '3600', videos_played: '50', active_days: '10', manual_triggers: '20', auto_plays: '30' }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ category: 'sponsors', plays: '30' }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ video_filename: 'video1.mp4', plays: '15' }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ alert_type: 'temperature', severity: 'warning' }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ date: '2025-12-01', screen_time: '1800', videos: '25' }],
+        });
+
+      await getClubDashboard(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          site_id: 'site-123',
+          health: expect.objectContaining({ status: 'online' }),
+          usage: expect.objectContaining({ videos_played: 50 }),
+          content: expect.objectContaining({ by_category: expect.any(Object) }),
+        })
+      );
+    });
+
+    it('should handle missing health metrics', async () => {
+      const req = createAuthRequest({ params: { siteId: 'site-123' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{ status: 'offline', last_seen_at: null, cpu_usage: null }] })
+        .mockResolvedValueOnce({ rows: [{ screen_time_seconds: '0', videos_played: '0', active_days: '0', manual_triggers: '0', auto_plays: '0' }] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      await getClubDashboard(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          health: expect.objectContaining({ current: null }),
+        })
+      );
+    });
+
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest({ params: { siteId: 'site-123' } });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await getClubDashboard(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('calculateDailyStats', () => {
+    it('should calculate daily stats for all sites', async () => {
+      const req = createAuthRequest({
+        body: { date: '2025-12-01' },
+      });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockResolvedValueOnce({
+        rows: [{ count: '10' }],
+      });
+
+      await calculateDailyStats(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          date: '2025-12-01',
+          sites_processed: 10,
+        })
+      );
+    });
+
+    it('should use yesterday as default date', async () => {
+      const req = createAuthRequest({ body: {} });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockResolvedValueOnce({ rows: [{ count: '5' }] });
+
+      await calculateDailyStats(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          sites_processed: 5,
+        })
+      );
+    });
+
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest({ body: {} });
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await calculateDailyStats(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('getAnalyticsOverview', () => {
+    it('should return global analytics overview', async () => {
+      const req = createAuthRequest();
+      const res = createMockResponse();
+
+      (query as jest.Mock)
+        .mockResolvedValueOnce({
+          rows: [{ active_sites: '15', total_videos_this_month: '1000', total_screen_time_this_month: '36000' }],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { id: 'site-1', site_name: 'Site A', club_name: 'Club A', videos_this_month: '100', screen_time_this_month: '3600' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ id: 'site-2', site_name: 'Site B', club_name: 'Club B', last_seen_at: null }],
+        });
+
+      await getAnalyticsOverview(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          global: expect.objectContaining({
+            active_sites: 15,
+            total_videos_this_month: 1000,
+          }),
+          top_sites: expect.any(Array),
+          inactive_sites: expect.any(Array),
+        })
+      );
+    });
+
+    it('should handle empty data', async () => {
+      const req = createAuthRequest();
+      const res = createMockResponse();
+
+      (query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{}] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      await getAnalyticsOverview(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          global: expect.objectContaining({
+            active_sites: 0,
+            total_videos_this_month: 0,
+          }),
+        })
+      );
+    });
+
+    it('should return 500 on database error', async () => {
+      const req = createAuthRequest();
+      const res = createMockResponse();
+
+      (query as jest.Mock).mockRejectedValueOnce(new Error('DB Error'));
+
+      await getAnalyticsOverview(req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
