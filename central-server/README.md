@@ -218,7 +218,7 @@ npm test -- --coverage  # Avec rapport de couverture
 
 ## 🧪 Tests
 
-Le serveur dispose de **224 tests unitaires** avec une couverture de **~67%**.
+Le serveur dispose de **230 tests unitaires** avec une couverture de **~67%**.
 
 ### Exécution
 
@@ -230,14 +230,14 @@ npm test
 
 | Fichier | Tests | Couverture |
 |---------|-------|------------|
-| auth.controller.ts | 14 | 100% |
+| auth.controller.ts | 16 | 100% |
 | sites.controller.ts | 35 | 91% |
 | groups.controller.ts | 21 | 90% |
 | content.controller.ts | 25 | 93% |
 | updates.controller.ts | 28 | 100% |
 | analytics.controller.ts | 40 | 93% |
 | config-history.controller.ts | 24 | 100% |
-| auth.ts (middleware) | 13 | 97% |
+| auth.ts (middleware) | 17 | 97% |
 | validation.ts | 25 | 100% |
 
 ### Structure
