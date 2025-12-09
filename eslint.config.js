@@ -43,6 +43,16 @@ module.exports = defineConfig([
     },
   },
   {
+    // Relax rules for test files
+    files: ["**/*.spec.ts", "**/*.test.ts"],
+    rules: {
+      "@angular-eslint/prefer-inject": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-empty-function": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+    },
+  },
+  {
     files: ["**/*.html"],
     extends: [
       angular.configs.templateRecommended,
