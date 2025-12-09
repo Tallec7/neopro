@@ -15,15 +15,18 @@ const getConfiguration: ResolveFn<Configuration> = () => {
 
   console.log('start loading configuration');
 
-  // En mode démo, utiliser la config du club sélectionné si disponible
+  // En mode démo
   if (demoConfigService.isDemoMode()) {
+    // Utiliser la config du club sélectionné si disponible
     const selectedConfig$ = demoConfigService.getSelectedConfiguration();
     if (selectedConfig$) {
-      return selectedConfig$.pipe(tap(data => console.log('load configuration (demo)', data)));
+      return selectedConfig$.pipe(tap(data => console.log('load configuration (demo club)', data)));
     }
+    // Sinon, charger la config démo par défaut
+    return http.get<Configuration>('/demo-configs/default.json').pipe(tap(data => console.log('load configuration (demo default)', data)));
   }
 
-  // Sinon, charger la config par défaut
+  // En mode normal, charger la config du Raspberry
   return http.get<Configuration>('/configuration.json').pipe(tap(((data) => console.log('load configuration', data))));
 };
 
