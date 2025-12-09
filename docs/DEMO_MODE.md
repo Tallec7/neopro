@@ -58,7 +58,7 @@ dist/raspberry/browser/           # Racine du serveur web
         ├── PARTENAIRES/          # Vidéos sponsors/boucle
         ├── FOCUS_PARTENAIRE/     # Vidéos focus partenaires
         ├── INFOS_CLUB/           # Vidéos infos club
-        ├── ENTREEE/              # Vidéos entrée joueurs (attention: 3 E)
+        ├── ENTREE/               # Vidéos entrée joueurs
         └── MATCH/                # Vidéos match (BUT/, JINGLE/)
             ├── BUT/
             └── JINGLE/
