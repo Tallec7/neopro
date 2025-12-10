@@ -183,10 +183,19 @@ class SocketService {
         ]
       );
 
-      await query(
-        'UPDATE sites SET last_seen_at = NOW(), status = $1 WHERE id = $2',
-        ['online', siteId]
-      );
+      // Update site status and local IP if provided
+      const localIp = message.metrics.localIp || null;
+      if (localIp) {
+        await query(
+          'UPDATE sites SET last_seen_at = NOW(), status = $1, local_ip = $3 WHERE id = $2',
+          ['online', siteId, localIp]
+        );
+      } else {
+        await query(
+          'UPDATE sites SET last_seen_at = NOW(), status = $1 WHERE id = $2',
+          ['online', siteId]
+        );
+      }
 
       this.checkAlerts(siteId, message.metrics);
     } catch (error) {
