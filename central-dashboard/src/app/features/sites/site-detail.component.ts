@@ -63,6 +63,10 @@ import { SiteContentViewerComponent } from './site-content-viewer/site-content-v
               <span class="label">Dernière vue:</span>
               <span class="value">{{ formatLastSeen(site.last_seen_at) }}</span>
             </div>
+            <div class="info-row" *ngIf="site.last_ip">
+              <span class="label">Adresse IP:</span>
+              <span class="value monospace">{{ site.last_ip }}</span>
+            </div>
             <div class="info-row">
               <span class="label">Créé le:</span>
               <span class="value">{{ site.created_at | date:'dd/MM/yyyy HH:mm' }}</span>

@@ -28,6 +28,7 @@ export interface Site {
   sports: string[] | null;
   status: 'online' | 'offline' | 'maintenance' | 'error';
   last_seen_at: Date | null;
+  last_ip: string | null;
   software_version: string | null;
   hardware_model: string;
   api_key: string;
