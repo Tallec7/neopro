@@ -133,10 +133,34 @@ ssh ${RASPBERRY_USER}@${RASPBERRY_IP} "
     tar --warning=no-unknown-keyword -xzf ~/neopro-deploy.tar.gz
 
     # Installation webapp
+    # IMPORTANT: Préserver configuration.json et videos/ qui sont spécifiques au club
     if [ -d ~/deploy/webapp ]; then
+        # Sauvegarder les fichiers à préserver
+        if [ -f ${RASPBERRY_DIR}/webapp/configuration.json ]; then
+            cp ${RASPBERRY_DIR}/webapp/configuration.json /tmp/configuration.json.backup
+            echo 'Configuration locale sauvegardée'
+        fi
+        if [ -d ${RASPBERRY_DIR}/webapp/videos ]; then
+            mv ${RASPBERRY_DIR}/webapp/videos /tmp/videos.backup
+            echo 'Vidéos locales sauvegardées'
+        fi
+
+        # Supprimer et installer la nouvelle webapp
         sudo rm -rf ${RASPBERRY_DIR}/webapp/*
         sudo cp -r ~/deploy/webapp/* ${RASPBERRY_DIR}/webapp/
-        echo 'Webapp installée'
+
+        # Restaurer les fichiers préservés
+        if [ -f /tmp/configuration.json.backup ]; then
+            sudo cp /tmp/configuration.json.backup ${RASPBERRY_DIR}/webapp/configuration.json
+            rm /tmp/configuration.json.backup
+            echo 'Configuration locale restaurée'
+        fi
+        if [ -d /tmp/videos.backup ]; then
+            sudo mv /tmp/videos.backup ${RASPBERRY_DIR}/webapp/videos
+            echo 'Vidéos locales restaurées'
+        fi
+
+        echo 'Webapp installée (configuration et vidéos préservées)'
     fi
 
     # Installation serveur
@@ -166,18 +190,16 @@ ssh ${RASPBERRY_USER}@${RASPBERRY_IP} "
         echo 'Admin panel installé'
     fi
 
-    # Permissions correctes pour nginx
+    # Permissions correctes pour nginx et sync-agent
     echo 'Configuration des permissions...'
     sudo chmod 755 /home/pi
     sudo chmod 755 ${RASPBERRY_DIR}
-    sudo chown -R www-data:www-data ${RASPBERRY_DIR}/webapp/
+    # webapp appartient à pi (pour sync-agent) mais accessible par www-data (nginx)
+    sudo chown -R pi:pi ${RASPBERRY_DIR}/webapp/
     sudo find ${RASPBERRY_DIR}/webapp -type f -exec chmod 644 {} \;
     sudo find ${RASPBERRY_DIR}/webapp -type d -exec chmod 755 {} \;
-    # configuration.json doit être éditable par pi (pour admin server)
-    if [ -f ${RASPBERRY_DIR}/webapp/configuration.json ]; then
-        sudo chown pi:pi ${RASPBERRY_DIR}/webapp/configuration.json
-        sudo chmod 664 ${RASPBERRY_DIR}/webapp/configuration.json
-    fi
+    # Ajouter www-data au groupe pi pour lecture (nginx)
+    sudo usermod -a -G pi www-data 2>/dev/null || true
     sudo chown -R pi:pi ${RASPBERRY_DIR}/server
     sudo chown -R pi:pi ${RASPBERRY_DIR}/admin
     sudo chown -R pi:pi ${RASPBERRY_DIR}/sync-agent
