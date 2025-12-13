@@ -213,6 +213,12 @@ class DeploymentService {
     // Utiliser le titre depuis metadata, sinon le nom original du fichier
     const videoTitle = deployment.metadata?.title || deployment.original_name;
 
+    // Vérifier que le checksum est présent (OBLIGATOIRE pour l'intégrité)
+    if (!deployment.checksum) {
+      logger.error('Cannot deploy video without checksum', { videoId, deploymentId });
+      throw new Error('Video checksum is required for deployment');
+    }
+
     const command = {
       id: uuidv4(),
       type: 'deploy_video',
@@ -225,7 +231,7 @@ class DeploymentService {
         category: deployment.category || 'default',
         subcategory: deployment.subcategory || null,
         duration: deployment.duration || 0,
-        checksum: deployment.checksum || null, // Checksum SHA256 pour vérification d'intégrité
+        checksum: deployment.checksum, // Checksum SHA256 OBLIGATOIRE
       }
     };
 

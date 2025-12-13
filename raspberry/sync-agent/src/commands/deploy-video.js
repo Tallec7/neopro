@@ -75,6 +75,14 @@ class VideoDeployHandler {
   async execute(data, progressCallback) {
     const { videoUrl, filename, originalName, category, subcategory, locked, expires_at, checksum } = data;
 
+    // CHECKSUM OBLIGATOIRE - Garantit l'intégrité des vidéos déployées
+    if (!checksum) {
+      const error = new Error('Checksum is required for video deployment. Video rejected for security.');
+      error.code = 'CHECKSUM_REQUIRED';
+      logger.error('Video deployment rejected: no checksum provided', { filename, category });
+      throw error;
+    }
+
     // Déploiement depuis le central = contenu NEOPRO (verrouillé par défaut)
     const isNeoProContent = locked !== false;
 
@@ -111,19 +119,15 @@ class VideoDeployHandler {
       // Vérifier le checksum (OBLIGATOIRE pour garantir l'intégrité)
       const downloadedChecksum = await calculateFileChecksum(targetPath);
 
-      if (checksum) {
-        if (downloadedChecksum !== checksum) {
-          // Supprimer le fichier corrompu
-          await fs.remove(targetPath);
-          const error = new Error(`Checksum mismatch: expected ${checksum}, got ${downloadedChecksum}`);
-          error.code = 'CHECKSUM_MISMATCH';
-          throw error;
-        }
-        logger.info('Checksum verified successfully', { checksum: downloadedChecksum });
-      } else {
-        // Générer et logger le checksum même si non fourni (pour traçabilité)
-        logger.warn('No checksum provided by central, computed locally', { computedChecksum: downloadedChecksum });
+      if (downloadedChecksum !== checksum) {
+        // Supprimer le fichier corrompu
+        await fs.remove(targetPath);
+        const error = new Error(`Checksum mismatch: expected ${checksum}, got ${downloadedChecksum}`);
+        error.code = 'CHECKSUM_MISMATCH';
+        logger.error('Video corrupted during transfer', { expected: checksum, actual: downloadedChecksum });
+        throw error;
       }
+      logger.info('Checksum verified successfully', { checksum: downloadedChecksum });
 
       const finalVideoData = {
         ...data,
@@ -142,7 +146,7 @@ class VideoDeployHandler {
         success: true,
         path: targetPath,
         size: stat.size,
-        checksum: checksum || (await calculateFileChecksum(targetPath)),
+        checksum, // Checksum vérifié
         filename: finalFilename,
       };
     } catch (error) {
