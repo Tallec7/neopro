@@ -1,7 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
-import { timingSafeEqual } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
+import bcrypt from 'bcryptjs';
 import { query } from '../config/database';
 import { SocketData, CommandMessage, CommandResult, HeartbeatMessage } from '../types';
 import logger from '../config/logger';
@@ -17,9 +17,16 @@ const getDeploymentService = async () => {
   return deploymentService;
 };
 
-const secureCompare = (a: string, b: string): boolean => {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+/**
+ * Vérifie une API key contre son hash bcrypt
+ * bcrypt.compare est déjà timing-safe par conception
+ */
+const verifyApiKey = async (providedKey: string, storedHash: string): Promise<boolean> => {
+  try {
+    return await bcrypt.compare(providedKey, storedHash);
+  } catch {
+    return false;
+  }
 };
 
 // Configuration des timeouts par type de commande (en ms)
@@ -169,13 +176,13 @@ class SocketService {
 
     const site = result.rows[0] as { id: string; site_name: string; api_key: string };
 
-    // Compare API keys using timing-safe comparison
-    if (!site.api_key || !secureCompare(site.api_key, apiKey)) {
+    // Vérifier l'API key avec bcrypt (timing-safe par conception)
+    const isValidKey = site.api_key && await verifyApiKey(apiKey, site.api_key);
+    if (!isValidKey) {
       logger.error('Invalid API key', {
         siteId,
         siteName: site.site_name,
-        storedKeyLength: site.api_key?.length,
-        providedKeyLength: apiKey?.length
+        hasStoredKey: !!site.api_key,
       });
       throw new Error('Clé API invalide');
     }

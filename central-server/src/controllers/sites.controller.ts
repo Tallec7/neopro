@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
+import bcrypt from 'bcryptjs';
 import { query } from '../config/database';
 import { AuthRequest } from '../types';
 import logger from '../config/logger';
@@ -13,8 +14,24 @@ class HttpError extends Error {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const BCRYPT_ROUNDS = 10;
+
 const generateApiKey = (): string => {
   return randomBytes(32).toString('hex');
+};
+
+/**
+ * Hash une API key avec bcrypt
+ */
+const hashApiKey = async (apiKey: string): Promise<string> => {
+  return bcrypt.hash(apiKey, BCRYPT_ROUNDS);
+};
+
+/**
+ * Vérifie une API key contre son hash
+ */
+export const verifyApiKey = async (apiKey: string, hash: string): Promise<boolean> => {
+  return bcrypt.compare(apiKey, hash);
 };
 
 export const getSites = async (req: AuthRequest, res: Response) => {
@@ -111,6 +128,7 @@ export const createSite = async (req: AuthRequest, res: Response) => {
 
     const id = uuidv4();
     const api_key = generateApiKey();
+    const api_key_hash = await hashApiKey(api_key);
 
     const result = await query(
       `INSERT INTO sites (id, site_name, club_name, location, sports, hardware_model, api_key)
@@ -123,14 +141,19 @@ export const createSite = async (req: AuthRequest, res: Response) => {
         location ? JSON.stringify(location) : null,
         sports ? JSON.stringify(sports) : null,
         hardware_model || 'Unknown',
-        api_key,
+        api_key_hash, // Stocker le hash, pas la clé en clair
       ]
     );
 
     logger.info('Site created', { siteId: id, siteName: uniqueSiteName, createdBy: req.user?.email });
 
     // Return the plain API key only once at creation time
-    res.status(201).json({ ...result.rows[0], api_key });
+    // IMPORTANT: L'utilisateur doit sauvegarder cette clé, elle ne sera plus jamais affichée
+    res.status(201).json({
+      ...result.rows[0],
+      api_key,
+      api_key_warning: 'Sauvegardez cette clé API. Elle ne sera plus jamais affichée.',
+    });
   } catch (error) {
     logger.error('Create site error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
@@ -223,10 +246,11 @@ export const regenerateApiKey = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
 
     const newApiKey = generateApiKey();
+    const newApiKeyHash = await hashApiKey(newApiKey);
 
     const result = await query(
       'UPDATE sites SET api_key = $1, updated_at = NOW() WHERE id = $2 RETURNING id, site_name, club_name, status, updated_at',
-      [newApiKey, id]
+      [newApiKeyHash, id] // Stocker le hash
     );
 
     if (result.rows.length === 0) {
@@ -236,7 +260,12 @@ export const regenerateApiKey = async (req: AuthRequest, res: Response) => {
     logger.info('API key regenerated', { siteId: id, regeneratedBy: req.user?.email });
 
     // Return the new plain API key only once
-    res.json({ ...result.rows[0], api_key: newApiKey });
+    // IMPORTANT: L'utilisateur doit sauvegarder cette clé, elle ne sera plus jamais affichée
+    res.json({
+      ...result.rows[0],
+      api_key: newApiKey,
+      api_key_warning: 'Sauvegardez cette clé API. Elle ne sera plus jamais affichée.',
+    });
   } catch (error) {
     logger.error('Regenerate API key error:', error);
     res.status(500).json({ error: 'Erreur lors de la régénération de la clé API' });
