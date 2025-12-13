@@ -1,7 +1,9 @@
 /**
  * Service de queue de commandes offline
- * Stocke les commandes localement quand le Pi est hors ligne
- * et les rejoue automatiquement à la reconnexion.
+ *
+ * Quand le Raspberry Pi est déconnecté du serveur central,
+ * les commandes locales sont mises en queue pour être synchronisées
+ * lors de la reconnexion.
  */
 
 const fs = require('fs-extra');
@@ -10,321 +12,333 @@ const { v4: uuidv4 } = require('uuid');
 const logger = require('../logger');
 const { config } = require('../config');
 
+const QUEUE_FILE = path.join(config.paths.root, 'data', 'offline-queue.json');
+const DEAD_LETTER_FILE = path.join(config.paths.root, 'data', 'dead-letter-queue.json');
+const MAX_RETRIES = 3;
+
 class OfflineQueueService {
   constructor() {
-    this.queuePath = path.join(config.paths.data || '/home/pi/neopro/data', 'offline-queue.json');
-    this.maxQueueSize = 100;
-    this.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 jours
+    this.isProcessing = false;
+    this.socket = null;
+  }
+
+  /**
+   * Initialise le service avec la connexion socket
+   * @param {Object} socket - Socket.io client
+   */
+  initialize(socket) {
+    this.socket = socket;
+    logger.info('OfflineQueueService initialized');
   }
 
   /**
    * Charge la queue depuis le fichier
-   * @returns {Promise<Array>}
+   * @returns {Promise<Array>} Queue de commandes
    */
   async loadQueue() {
     try {
-      if (await fs.pathExists(this.queuePath)) {
-        const content = await fs.readFile(this.queuePath, 'utf-8');
+      await fs.ensureDir(path.dirname(QUEUE_FILE));
+
+      if (await fs.pathExists(QUEUE_FILE)) {
+        const content = await fs.readFile(QUEUE_FILE, 'utf8');
         return JSON.parse(content);
       }
+      return [];
     } catch (error) {
-      logger.warn('Failed to load offline queue:', error.message);
+      logger.error('Failed to load offline queue:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Sauvegarde la queue dans le fichier
+   * @param {Array} queue - Queue à sauvegarder
+   */
+  async saveQueue(queue) {
+    try {
+      await fs.ensureDir(path.dirname(QUEUE_FILE));
+      await fs.writeFile(QUEUE_FILE, JSON.stringify(queue, null, 2));
+    } catch (error) {
+      logger.error('Failed to save offline queue:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Ajoute une commande à la queue
+   * @param {string} commandType - Type de commande
+   * @param {Object} data - Données de la commande
+   * @param {Object} options - Options supplémentaires
+   * @returns {Promise<Object>} Commande ajoutée
+   */
+  async enqueue(commandType, data, options = {}) {
+    const queue = await this.loadQueue();
+
+    const command = {
+      id: uuidv4(),
+      type: commandType,
+      data,
+      timestamp: new Date().toISOString(),
+      retries: 0,
+      lastError: null,
+      priority: options.priority || 'normal',
+      source: options.source || 'local',
+    };
+
+    queue.push(command);
+
+    // Trier par priorité (high first)
+    queue.sort((a, b) => {
+      const priorityOrder = { high: 0, normal: 1, low: 2 };
+      return priorityOrder[a.priority] - priorityOrder[b.priority];
+    });
+
+    await this.saveQueue(queue);
+
+    logger.info('Command enqueued for offline processing', {
+      id: command.id,
+      type: commandType,
+      queueSize: queue.length,
+    });
+
+    return command;
+  }
+
+  /**
+   * Retire une commande de la queue
+   * @param {string} commandId - ID de la commande
+   */
+  async dequeue(commandId) {
+    const queue = await this.loadQueue();
+    const filteredQueue = queue.filter(cmd => cmd.id !== commandId);
+    await this.saveQueue(filteredQueue);
+    logger.info('Command removed from queue', { id: commandId });
+  }
+
+  /**
+   * Déplace une commande vers la dead letter queue
+   * @param {Object} command - Commande à déplacer
+   */
+  async moveToDeadLetter(command) {
+    try {
+      await fs.ensureDir(path.dirname(DEAD_LETTER_FILE));
+
+      let deadLetterQueue = [];
+      if (await fs.pathExists(DEAD_LETTER_FILE)) {
+        const content = await fs.readFile(DEAD_LETTER_FILE, 'utf8');
+        deadLetterQueue = JSON.parse(content);
+      }
+
+      deadLetterQueue.push({
+        ...command,
+        movedAt: new Date().toISOString(),
+        reason: 'max_retries_exceeded',
+      });
+
+      // Garder seulement les 100 dernières commandes échouées
+      if (deadLetterQueue.length > 100) {
+        deadLetterQueue = deadLetterQueue.slice(-100);
+      }
+
+      await fs.writeFile(DEAD_LETTER_FILE, JSON.stringify(deadLetterQueue, null, 2));
+      await this.dequeue(command.id);
+
+      logger.warn('Command moved to dead letter queue', {
+        id: command.id,
+        type: command.type,
+        retries: command.retries,
+      });
+    } catch (error) {
+      logger.error('Failed to move command to dead letter queue:', error);
+    }
+  }
+
+  /**
+   * Traite toutes les commandes en queue lors de la reconnexion
+   * @returns {Promise<Object>} Résultat du traitement
+   */
+  async processOnReconnect() {
+    if (this.isProcessing) {
+      logger.warn('Queue processing already in progress');
+      return { skipped: true };
+    }
+
+    this.isProcessing = true;
+    const results = {
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      retrying: 0,
+    };
+
+    try {
+      const queue = await this.loadQueue();
+
+      if (queue.length === 0) {
+        logger.info('No offline commands to process');
+        return results;
+      }
+
+      logger.info('Processing offline queue', { queueSize: queue.length });
+
+      for (const command of queue) {
+        results.processed++;
+
+        try {
+          await this.executeCommand(command);
+          await this.dequeue(command.id);
+          results.succeeded++;
+
+          logger.info('Offline command executed successfully', {
+            id: command.id,
+            type: command.type,
+          });
+        } catch (error) {
+          command.retries++;
+          command.lastError = error.message;
+          command.lastRetryAt = new Date().toISOString();
+
+          if (command.retries >= MAX_RETRIES) {
+            await this.moveToDeadLetter(command);
+            results.failed++;
+          } else {
+            const updatedQueue = await this.loadQueue();
+            const index = updatedQueue.findIndex(c => c.id === command.id);
+            if (index >= 0) {
+              updatedQueue[index] = command;
+              await this.saveQueue(updatedQueue);
+            }
+            results.retrying++;
+
+            logger.warn('Offline command failed, will retry', {
+              id: command.id,
+              type: command.type,
+              retries: command.retries,
+              error: error.message,
+            });
+          }
+        }
+      }
+
+      logger.info('Offline queue processing completed', results);
+      return results;
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  /**
+   * Exécute une commande via le socket central
+   * @param {Object} command - Commande à exécuter
+   */
+  async executeCommand(command) {
+    if (!this.socket || !this.socket.connected) {
+      throw new Error('Not connected to central server');
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Command execution timeout'));
+      }, 30000);
+
+      this.socket.emit('offline_command_sync', {
+        commandId: command.id,
+        type: command.type,
+        data: command.data,
+        originalTimestamp: command.timestamp,
+      }, (response) => {
+        clearTimeout(timeout);
+
+        if (response && response.success) {
+          resolve(response);
+        } else {
+          reject(new Error(response?.error || 'Command execution failed'));
+        }
+      });
+    });
+  }
+
+  /**
+   * Retourne les statistiques de la queue
+   * @returns {Promise<Object>} Statistiques
+   */
+  async getStats() {
+    const queue = await this.loadQueue();
+
+    let deadLetterQueue = [];
+    if (await fs.pathExists(DEAD_LETTER_FILE)) {
+      const content = await fs.readFile(DEAD_LETTER_FILE, 'utf8');
+      deadLetterQueue = JSON.parse(content);
+    }
+
+    const stats = {
+      queueSize: queue.length,
+      deadLetterSize: deadLetterQueue.length,
+      byType: {},
+      byPriority: { high: 0, normal: 0, low: 0 },
+      oldestCommand: null,
+    };
+
+    for (const cmd of queue) {
+      stats.byType[cmd.type] = (stats.byType[cmd.type] || 0) + 1;
+      stats.byPriority[cmd.priority] = (stats.byPriority[cmd.priority] || 0) + 1;
+
+      if (!stats.oldestCommand || cmd.timestamp < stats.oldestCommand) {
+        stats.oldestCommand = cmd.timestamp;
+      }
+    }
+
+    return stats;
+  }
+
+  /**
+   * Vide la queue (pour debug/maintenance)
+   */
+  async clearQueue() {
+    await this.saveQueue([]);
+    logger.warn('Offline queue cleared');
+  }
+
+  /**
+   * Récupère les commandes de la dead letter queue
+   * @returns {Promise<Array>} Commandes échouées
+   */
+  async getDeadLetterQueue() {
+    if (await fs.pathExists(DEAD_LETTER_FILE)) {
+      const content = await fs.readFile(DEAD_LETTER_FILE, 'utf8');
+      return JSON.parse(content);
     }
     return [];
   }
 
   /**
-   * Sauvegarde la queue sur disque
-   * @param {Array} queue
+   * Remet une commande de la dead letter dans la queue principale
+   * @param {string} commandId - ID de la commande
    */
-  async saveQueue(queue) {
-    try {
-      await fs.ensureDir(path.dirname(this.queuePath));
-      await fs.writeFile(this.queuePath, JSON.stringify(queue, null, 2));
-    } catch (error) {
-      logger.error('Failed to save offline queue:', error);
-    }
-  }
+  async retryDeadLetter(commandId) {
+    const deadLetterQueue = await this.getDeadLetterQueue();
+    const commandIndex = deadLetterQueue.findIndex(c => c.id === commandId);
 
-  /**
-   * Ajoute une commande à la queue offline
-   * @param {string} commandType Type de commande
-   * @param {object} commandData Données de la commande
-   * @param {object} options Options (priority, expiresAt, etc.)
-   * @returns {Promise<string>} ID de l'entrée
-   */
-  async enqueue(commandType, commandData, options = {}) {
-    try {
-      const queue = await this.loadQueue();
-
-      const entry = {
-        id: uuidv4(),
-        type: commandType,
-        data: commandData,
-        priority: options.priority || 'normal', // high, normal, low
-        createdAt: new Date().toISOString(),
-        expiresAt: options.expiresAt || new Date(Date.now() + this.maxAge).toISOString(),
-        attempts: 0,
-        maxAttempts: options.maxAttempts || 3,
-        lastError: null,
-      };
-
-      // Dédupliquer les commandes du même type avec les mêmes données
-      const isDuplicate = queue.some(
-        (item) => item.type === commandType && JSON.stringify(item.data) === JSON.stringify(commandData)
-      );
-
-      if (isDuplicate) {
-        logger.debug('Duplicate command ignored', { type: commandType });
-        return null;
-      }
-
-      // Ajouter en respectant la priorité
-      if (entry.priority === 'high') {
-        queue.unshift(entry);
-      } else {
-        queue.push(entry);
-      }
-
-      // Limiter la taille de la queue
-      if (queue.length > this.maxQueueSize) {
-        // Supprimer les plus anciennes commandes low priority d'abord
-        const lowPriorityIndex = queue.findIndex((item) => item.priority === 'low');
-        if (lowPriorityIndex !== -1) {
-          queue.splice(lowPriorityIndex, 1);
-        } else {
-          queue.pop(); // Supprimer la dernière
-        }
-      }
-
-      await this.saveQueue(queue);
-
-      logger.info('Command queued for offline execution', {
-        id: entry.id,
-        type: commandType,
-        priority: entry.priority,
-        queueSize: queue.length,
-      });
-
-      return entry.id;
-    } catch (error) {
-      logger.error('Failed to enqueue command:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Récupère et supprime la prochaine commande à exécuter
-   * @returns {Promise<object|null>}
-   */
-  async dequeue() {
-    try {
-      const queue = await this.loadQueue();
-
-      if (queue.length === 0) {
-        return null;
-      }
-
-      // Filtrer les commandes expirées
-      const now = new Date();
-      const validQueue = queue.filter((item) => new Date(item.expiresAt) > now);
-
-      if (validQueue.length !== queue.length) {
-        const expiredCount = queue.length - validQueue.length;
-        logger.info('Expired commands removed from queue', { count: expiredCount });
-        await this.saveQueue(validQueue);
-      }
-
-      if (validQueue.length === 0) {
-        return null;
-      }
-
-      // Récupérer la première commande (priorité déjà gérée à l'insertion)
-      const entry = validQueue.shift();
-      await this.saveQueue(validQueue);
-
-      return entry;
-    } catch (error) {
-      logger.error('Failed to dequeue command:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Remet une commande en queue après un échec
-   * @param {object} entry L'entrée à remettre en queue
-   * @param {string} error Message d'erreur
-   */
-  async requeue(entry, error) {
-    try {
-      entry.attempts++;
-      entry.lastError = error;
-
-      if (entry.attempts >= entry.maxAttempts) {
-        logger.warn('Command exceeded max attempts, discarding', {
-          id: entry.id,
-          type: entry.type,
-          attempts: entry.attempts,
-          lastError: error,
-        });
-        return false;
-      }
-
-      const queue = await this.loadQueue();
-      queue.push(entry); // Remettre à la fin
-      await this.saveQueue(queue);
-
-      logger.info('Command requeued for retry', {
-        id: entry.id,
-        type: entry.type,
-        attempts: entry.attempts,
-        maxAttempts: entry.maxAttempts,
-      });
-
-      return true;
-    } catch (err) {
-      logger.error('Failed to requeue command:', err);
-      return false;
-    }
-  }
-
-  /**
-   * Exécute toutes les commandes en queue
-   * @param {Function} executor Fonction qui exécute une commande
-   * @returns {Promise<object>} Statistiques d'exécution
-   */
-  async processQueue(executor) {
-    const stats = {
-      processed: 0,
-      succeeded: 0,
-      failed: 0,
-      requeued: 0,
-    };
-
-    logger.info('Processing offline queue...');
-
-    let entry;
-    while ((entry = await this.dequeue()) !== null) {
-      stats.processed++;
-
-      try {
-        logger.info('Executing queued command', {
-          id: entry.id,
-          type: entry.type,
-          attempt: entry.attempts + 1,
-        });
-
-        await executor(entry.type, entry.data);
-
-        stats.succeeded++;
-        logger.info('Queued command succeeded', { id: entry.id, type: entry.type });
-      } catch (error) {
-        stats.failed++;
-        logger.error('Queued command failed', {
-          id: entry.id,
-          type: entry.type,
-          error: error.message,
-        });
-
-        // Remettre en queue si les tentatives ne sont pas épuisées
-        if (await this.requeue(entry, error.message)) {
-          stats.requeued++;
-        }
-      }
+    if (commandIndex < 0) {
+      throw new Error('Command not found in dead letter queue');
     }
 
-    if (stats.processed > 0) {
-      logger.info('Offline queue processing complete', stats);
-    }
+    const command = deadLetterQueue[commandIndex];
+    command.retries = 0;
+    command.lastError = null;
+    delete command.movedAt;
+    delete command.reason;
 
-    return stats;
-  }
+    deadLetterQueue.splice(commandIndex, 1);
+    await fs.writeFile(DEAD_LETTER_FILE, JSON.stringify(deadLetterQueue, null, 2));
 
-  /**
-   * Retourne le nombre de commandes en attente
-   * @returns {Promise<number>}
-   */
-  async getQueueSize() {
     const queue = await this.loadQueue();
-    return queue.length;
-  }
+    queue.push(command);
+    await this.saveQueue(queue);
 
-  /**
-   * Retourne les statistiques de la queue
-   * @returns {Promise<object>}
-   */
-  async getStats() {
-    const queue = await this.loadQueue();
-    const now = new Date();
-
-    const stats = {
-      total: queue.length,
-      byPriority: {
-        high: 0,
-        normal: 0,
-        low: 0,
-      },
-      byType: {},
-      expired: 0,
-      withErrors: 0,
-    };
-
-    for (const item of queue) {
-      // Par priorité
-      stats.byPriority[item.priority] = (stats.byPriority[item.priority] || 0) + 1;
-
-      // Par type
-      stats.byType[item.type] = (stats.byType[item.type] || 0) + 1;
-
-      // Expirées
-      if (new Date(item.expiresAt) <= now) {
-        stats.expired++;
-      }
-
-      // Avec erreurs
-      if (item.lastError) {
-        stats.withErrors++;
-      }
-    }
-
-    return stats;
-  }
-
-  /**
-   * Vide la queue
-   * @returns {Promise<number>} Nombre d'entrées supprimées
-   */
-  async clear() {
-    const queue = await this.loadQueue();
-    const count = queue.length;
-
-    await this.saveQueue([]);
-
-    logger.info('Offline queue cleared', { count });
-    return count;
-  }
-
-  /**
-   * Nettoie les commandes expirées
-   * @returns {Promise<number>} Nombre d'entrées supprimées
-   */
-  async cleanup() {
-    const queue = await this.loadQueue();
-    const now = new Date();
-
-    const validQueue = queue.filter((item) => new Date(item.expiresAt) > now);
-    const removedCount = queue.length - validQueue.length;
-
-    if (removedCount > 0) {
-      await this.saveQueue(validQueue);
-      logger.info('Expired commands cleaned up', { removed: removedCount });
-    }
-
-    return removedCount;
+    logger.info('Command moved from dead letter to main queue', { id: commandId });
+    return command;
   }
 }
 
-// Singleton
-const offlineQueue = new OfflineQueueService();
-
-module.exports = offlineQueue;
+module.exports = new OfflineQueueService();
