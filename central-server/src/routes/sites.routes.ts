@@ -11,9 +11,13 @@ router.get('/', authenticate, paginationMiddleware, sitesController.getSites);
 
 router.get('/stats', authenticate, sitesController.getSiteStats);
 
+router.get('/connection-status', authenticate, sitesController.getAllSitesConnectionStatus);
+
 router.get('/:id', authenticate, sitesController.getSite);
 
 router.get('/:id/metrics', authenticate, sitesController.getSiteMetrics);
+
+router.get('/:id/connection-status', authenticate, sitesController.getSiteConnectionStatus);
 
 router.get(
   '/:id/logs',

@@ -335,6 +335,82 @@ export const getSiteStats = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getAllSitesConnectionStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    // Récupérer tous les sites avec leur dernier heartbeat
+    const sitesResult = await query(`
+      SELECT
+        s.id,
+        s.site_name,
+        s.club_name,
+        s.status,
+        s.last_seen_at,
+        s.local_ip
+      FROM sites s
+      ORDER BY s.site_name
+    `);
+
+    const socketService = (await import('../services/socket.service')).default;
+    const connectedSiteIds = new Set(socketService.getConnectedSites());
+    const now = new Date();
+
+    const sitesWithStatus = (sitesResult.rows as Array<{
+      id: string;
+      site_name: string;
+      club_name: string;
+      status: string;
+      last_seen_at: Date | null;
+      local_ip: string | null;
+    }>).map((site) => {
+      const isConnectedNow = connectedSiteIds.has(site.id);
+      const lastSeenAt = site.last_seen_at ? new Date(site.last_seen_at) : null;
+      const secondsSinceLastSeen = lastSeenAt
+        ? Math.floor((now.getTime() - lastSeenAt.getTime()) / 1000)
+        : null;
+
+      let displayStatus: 'online' | 'offline' | 'warning' | 'unknown';
+      if (isConnectedNow) {
+        displayStatus = 'online';
+      } else if (secondsSinceLastSeen === null) {
+        displayStatus = 'unknown';
+      } else if (secondsSinceLastSeen < 120) {
+        displayStatus = 'warning';
+      } else {
+        displayStatus = 'offline';
+      }
+
+      return {
+        siteId: site.id,
+        siteName: site.site_name,
+        clubName: site.club_name,
+        isConnected: isConnectedNow,
+        displayStatus,
+        lastSeenAt: site.last_seen_at,
+        secondsSinceLastSeen,
+        localIp: site.local_ip,
+      };
+    });
+
+    // Calculer les stats globales
+    const stats = {
+      total: sitesWithStatus.length,
+      online: sitesWithStatus.filter((s) => s.displayStatus === 'online').length,
+      warning: sitesWithStatus.filter((s) => s.displayStatus === 'warning').length,
+      offline: sitesWithStatus.filter((s) => s.displayStatus === 'offline').length,
+      unknown: sitesWithStatus.filter((s) => s.displayStatus === 'unknown').length,
+    };
+
+    res.json({
+      sites: sitesWithStatus,
+      stats,
+      timestamp: now.toISOString(),
+    });
+  } catch (error) {
+    logger.error('Get all sites connection status error:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des statuts de connexion' });
+  }
+};
+
 const validateCommandPayload = (command: string, data?: any) => {
   if (command === 'update_config') {
     const hasValidPayload = data && (
@@ -528,6 +604,103 @@ export const getSystemInfo = async (req: AuthRequest, res: Response) => {
       return res.status(error.status).json({ error: error.message });
     }
     res.status(500).json({ error: 'Erreur lors de la récupération des informations système' });
+  }
+};
+
+export const getSiteConnectionStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Récupérer les infos du site
+    const siteResult = await query(
+      `SELECT id, site_name, club_name, status, last_seen_at, local_ip, last_config_sync
+       FROM sites WHERE id = $1`,
+      [id]
+    );
+
+    if (siteResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Site non trouvé' });
+    }
+
+    const site = siteResult.rows[0] as {
+      id: string;
+      site_name: string;
+      club_name: string;
+      status: string;
+      last_seen_at: Date | null;
+      local_ip: string | null;
+      last_config_sync: Date | null;
+    };
+
+    // Vérifier la connexion en temps réel via le socket
+    const socketService = (await import('../services/socket.service')).default;
+    const isConnectedNow = socketService.isConnected(id);
+
+    // Calculer le temps depuis la dernière connexion
+    const lastSeenAt = site.last_seen_at ? new Date(site.last_seen_at) : null;
+    const now = new Date();
+    const secondsSinceLastSeen = lastSeenAt
+      ? Math.floor((now.getTime() - lastSeenAt.getTime()) / 1000)
+      : null;
+
+    // Déterminer le statut d'affichage
+    let displayStatus: 'online' | 'offline' | 'warning' | 'unknown';
+    if (isConnectedNow) {
+      displayStatus = 'online';
+    } else if (secondsSinceLastSeen === null) {
+      displayStatus = 'unknown';
+    } else if (secondsSinceLastSeen < 120) {
+      // Moins de 2 minutes = probablement juste un petit délai
+      displayStatus = 'warning';
+    } else {
+      displayStatus = 'offline';
+    }
+
+    // Récupérer les statistiques de connexion récentes (24h)
+    const statsResult = await query(
+      `SELECT
+         COUNT(*) as heartbeat_count,
+         MIN(recorded_at) as first_heartbeat,
+         MAX(recorded_at) as last_heartbeat
+       FROM metrics
+       WHERE site_id = $1 AND recorded_at > NOW() - INTERVAL '24 hours'`,
+      [id]
+    );
+
+    const stats = statsResult.rows[0] as {
+      heartbeat_count: string;
+      first_heartbeat: Date | null;
+      last_heartbeat: Date | null;
+    };
+
+    const heartbeatCount24h = parseInt(stats?.heartbeat_count || '0', 10);
+    // Uptime estimé: heartbeat toutes les 30s = 2880 max par 24h
+    const uptime24h = Math.min(100, (heartbeatCount24h / 2880) * 100);
+
+    res.json({
+      siteId: id,
+      siteName: site.site_name,
+      clubName: site.club_name,
+      connection: {
+        isConnected: isConnectedNow,
+        displayStatus,
+        lastSeenAt: site.last_seen_at,
+        secondsSinceLastSeen,
+        localIp: site.local_ip,
+      },
+      sync: {
+        lastConfigSync: site.last_config_sync,
+      },
+      statistics: {
+        heartbeats24h: heartbeatCount24h,
+        uptime24h: Math.round(uptime24h * 100) / 100,
+        firstHeartbeat24h: stats?.first_heartbeat,
+        lastHeartbeat24h: stats?.last_heartbeat,
+      },
+    });
+  } catch (error) {
+    logger.error('Get site connection status error:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération du statut de connexion' });
   }
 };
 

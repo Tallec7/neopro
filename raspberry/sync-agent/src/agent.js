@@ -12,6 +12,7 @@ const ConfigWatcher = require('./watchers/config-watcher');
 const expirationChecker = require('./tasks/expiration-checker');
 const syncHistory = require('./services/sync-history');
 const offlineQueue = require('./services/offline-queue');
+const connectionStatus = require('./services/connection-status');
 const localBackup = require('./tasks/local-backup');
 
 class NeoproSyncAgent {
@@ -78,6 +79,7 @@ class NeoproSyncAgent {
     logger.info('✅ Connected to central server');
 
     this.reconnectAttempts = 0;
+    connectionStatus.setConnected(true, 'socket_connected');
 
     this.socket.emit('authenticate', {
       siteId: config.site.id,
@@ -89,6 +91,7 @@ class NeoproSyncAgent {
     logger.info('Authenticated successfully', data);
 
     this.connected = true;
+    connectionStatus.recordSync(true);
 
     // Enregistrer la connexion dans l'historique
     syncHistory.recordConnection(true, { siteId: config.site.id });
@@ -192,9 +195,26 @@ class NeoproSyncAgent {
         configHash,
         categoriesCount: localConfig.categories?.length || 0,
       });
+
+      // Enregistrer la synchronisation réussie
+      connectionStatus.recordSync(true);
     } catch (error) {
       logger.error('Failed to sync local state:', error);
+      connectionStatus.recordSync(false);
     }
+  }
+
+  /**
+   * Retourne le statut de connexion actuel
+   * @returns {Object} Statut de connexion
+   */
+  getConnectionStatus() {
+    return {
+      ...connectionStatus.getStatus(),
+      socketConnected: this.socket?.connected || false,
+      reconnectAttempts: this.reconnectAttempts,
+      maxReconnectAttempts: this.maxReconnectAttempts,
+    };
   }
 
   handleAuthError(data) {
@@ -210,6 +230,7 @@ class NeoproSyncAgent {
     logger.warn('Disconnected from central server', { reason });
 
     this.connected = false;
+    connectionStatus.setConnected(false, reason);
 
     // Enregistrer la déconnexion dans l'historique
     syncHistory.recordConnection(false, { reason });
@@ -232,6 +253,7 @@ class NeoproSyncAgent {
 
   handleConnectError(error) {
     this.reconnectAttempts++;
+    connectionStatus.recordReconnectAttempt();
 
     logger.error('Connection error', {
       attempt: this.reconnectAttempts,
@@ -483,4 +505,5 @@ module.exports = {
   NeoproSyncAgent,
   agent,
   offlineQueue,
+  connectionStatus,
 };
