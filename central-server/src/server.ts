@@ -19,6 +19,7 @@ import contentRoutes from './routes/content.routes';
 import updatesRoutes from './routes/updates.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import auditRoutes from './routes/audit.routes';
+import canaryRoutes from './routes/canary.routes';
 import { authRateLimit, apiRateLimit, sensitiveRateLimit } from './middleware/user-rate-limit';
 
 dotenv.config();
@@ -190,6 +191,7 @@ app.use('/api', apiRateLimit, contentRoutes);
 app.use('/api', sensitiveRateLimit, updatesRoutes); // Mises à jour - sensible
 app.use('/api/analytics', apiRateLimit, analyticsRoutes);
 app.use('/api/audit', apiRateLimit, auditRoutes);
+app.use('/api/canary', sensitiveRateLimit, canaryRoutes); // Déploiements canary - sensible
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({
