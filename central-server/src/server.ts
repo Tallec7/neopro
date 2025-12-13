@@ -1,10 +1,13 @@
 import express, { Request, Response, NextFunction } from 'express';
 import http from 'http';
 import dns from 'node:dns';
+import path from 'path';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yamljs';
 import dotenv from 'dotenv';
 
 import logger from './config/logger';
@@ -118,8 +121,21 @@ app.get('/', (_req: Request, res: Response) => {
     version: '1.0.0',
     status: 'online',
     timestamp: new Date().toISOString(),
+    documentation: '/api-docs',
   });
 });
+
+// Documentation API Swagger/OpenAPI
+try {
+  const swaggerDocument = YAML.load(path.join(__dirname, 'docs', 'openapi.yaml'));
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'NEOPRO API Documentation',
+  }));
+  logger.info('Swagger documentation available at /api-docs');
+} catch (error) {
+  logger.warn('Could not load OpenAPI documentation:', error);
+}
 
 app.get('/health', async (_req: Request, res: Response) => {
   const startTime = Date.now();

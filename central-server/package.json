@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
-    "build": "tsc",
+    "build": "tsc && cp -r src/docs dist/",
     "start": "node dist/server.js",
     "db:migrate": "ts-node src/scripts/migrate.ts",
     "db:seed": "ts-node src/scripts/seed.ts",
@@ -42,8 +42,10 @@
     "qrcode": "^1.5.4",
     "redis": "^5.10.0",
     "socket.io": "^4.7.2",
+    "swagger-ui-express": "^5.0.1",
     "uuid": "^9.0.1",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "yamljs": "^0.3.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -57,7 +59,9 @@
     "@types/node": "^20.10.6",
     "@types/qrcode": "^1.5.6",
     "@types/supertest": "^6.0.3",
+    "@types/swagger-ui-express": "^4.1.8",
     "@types/uuid": "^9.0.7",
+    "@types/yamljs": "^0.2.34",
     "@typescript-eslint/eslint-plugin": "^6.16.0",
     "@typescript-eslint/parser": "^6.16.0",
     "eslint": "^8.56.0",
