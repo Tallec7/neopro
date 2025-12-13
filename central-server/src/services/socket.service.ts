@@ -106,10 +106,10 @@ class SocketService {
       this.redisSub = this.redisClient.duplicate();
 
       // Gérer les erreurs de connexion
-      this.redisClient.on('error', (err) => {
+      this.redisClient.on('error', (err: Error) => {
         logger.error('Redis pub client error:', err);
       });
-      this.redisSub.on('error', (err) => {
+      this.redisSub.on('error', (err: Error) => {
         logger.error('Redis sub client error:', err);
       });
 

@@ -5,7 +5,7 @@
 import { Router, Response } from 'express';
 import { auditService, AuditAction } from '../services/audit.service';
 import { AuthRequest } from '../types';
-import { authMiddleware } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -13,10 +13,10 @@ const router = Router();
  * GET /api/audit
  * Récupère les logs d'audit avec pagination et filtres
  */
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     // Vérifier que l'utilisateur est admin
-    if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin') {
+    if (req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Accès refusé. Réservé aux administrateurs.' });
     }
 
@@ -51,7 +51,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
  * GET /api/audit/actions
  * Liste les types d'actions disponibles
  */
-router.get('/actions', authMiddleware, (_req: AuthRequest, res: Response) => {
+router.get('/actions', authenticate, (_req: AuthRequest, res: Response) => {
   const actions: AuditAction[] = [
     'USER_LOGIN',
     'USER_LOGOUT',

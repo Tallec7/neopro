@@ -113,7 +113,7 @@ export const roleBasedRateLimit = (
     windowMs,
     max: (req: Request): number => {
       const authReq = req as AuthRequest;
-      if (authReq.user?.role === 'admin' || authReq.user?.role === 'super_admin') {
+      if (authReq.user?.role === 'admin') {
         return baseMax * adminMultiplier;
       }
       return baseMax;

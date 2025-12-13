@@ -236,16 +236,20 @@ export const deleteSite = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    const result = await query('DELETE FROM sites WHERE id = $1 RETURNING site_name', [id]);
+    const result = await query<{ site_name: string; [key: string]: unknown }>(
+      'DELETE FROM sites WHERE id = $1 RETURNING site_name',
+      [id]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Site non trouvé' });
     }
 
-    logger.info('Site deleted', { siteId: id, siteName: result.rows[0].site_name, deletedBy: req.user?.email });
+    const siteName = result.rows[0].site_name;
+    logger.info('Site deleted', { siteId: id, siteName, deletedBy: req.user?.email });
 
     // Audit log
-    auditService.logSiteDeleted(id, result.rows[0].site_name, req);
+    auditService.logSiteDeleted(id, siteName, req);
 
     res.json({ message: 'Site supprimé avec succès' });
   } catch (error) {

@@ -12,6 +12,7 @@ import pool from './config/database';
 import socketService from './services/socket.service';
 
 import authRoutes from './routes/auth.routes';
+import mfaRoutes from './routes/mfa.routes';
 import sitesRoutes from './routes/sites.routes';
 import groupsRoutes from './routes/groups.routes';
 import contentRoutes from './routes/content.routes';
@@ -181,6 +182,7 @@ app.get('/health', async (_req: Request, res: Response) => {
 
 // Rate limiters spécifiques par type d'endpoint
 app.use('/api/auth', authRateLimit, authRoutes); // Restrictif pour auth
+app.use('/api/mfa', authRateLimit, mfaRoutes);   // MFA - même restrictions que auth
 app.use('/api/sites', apiRateLimit, sitesRoutes);
 app.use('/api/groups', apiRateLimit, groupsRoutes);
 app.use('/api/videos', sensitiveRateLimit); // Upload de vidéos - plus restrictif

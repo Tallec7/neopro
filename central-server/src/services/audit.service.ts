@@ -208,7 +208,7 @@ class AuditService {
         ),
       ]);
 
-      const total = parseInt(countResult.rows[0]?.total || '0', 10);
+      const total = parseInt(String(countResult.rows[0]?.total ?? '0'), 10);
 
       return {
         logs: logsResult.rows,
