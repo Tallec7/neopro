@@ -9,6 +9,7 @@ const router = Router();
 // Video routes
 router.get('/videos', authenticate, paginationMiddleware, contentController.getVideos);
 router.get('/videos/:id', authenticate, contentController.getVideo);
+router.get('/videos/:id/deployments', authenticate, contentController.getVideoDeployments);
 router.post('/videos', authenticate, requireRole('admin', 'operator'), uploadVideo.single('video'), contentController.createVideo);
 router.post('/videos/bulk', authenticate, requireRole('admin', 'operator'), uploadVideo.array('videos', 20), contentController.createVideos);
 router.put('/videos/:id', authenticate, requireRole('admin', 'operator'), contentController.updateVideo);

@@ -96,6 +96,61 @@ export const getVideo = async (req: AuthRequest, res: Response) => {
   }
 };
 
+/**
+ * Récupère l'historique des déploiements pour une vidéo spécifique
+ */
+export const getVideoDeployments = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Vérifier que la vidéo existe
+    const videoResult = await pool.query('SELECT id FROM videos WHERE id = $1', [id]);
+    if (videoResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Vidéo non trouvée' });
+    }
+
+    // Récupérer tous les déploiements pour cette vidéo
+    const result = await pool.query(
+      `SELECT cd.id, cd.video_id, cd.target_type, cd.target_id, cd.status, cd.progress,
+              cd.error_message as error, cd.completed_at, cd.created_at, cd.started_at,
+              CASE
+                WHEN cd.target_type = 'site' THEN s.site_name
+                WHEN cd.target_type = 'group' THEN g.name
+              END as target_name,
+              CASE
+                WHEN cd.target_type = 'site' THEN s.club_name
+                ELSE NULL
+              END as club_name,
+              u.first_name || ' ' || u.last_name as deployed_by_name
+       FROM content_deployments cd
+       LEFT JOIN sites s ON cd.target_type = 'site' AND cd.target_id = s.id
+       LEFT JOIN groups g ON cd.target_type = 'group' AND cd.target_id = g.id
+       LEFT JOIN users u ON cd.deployed_by = u.id
+       WHERE cd.video_id = $1
+       ORDER BY cd.created_at DESC`,
+      [id]
+    );
+
+    // Statistiques résumées
+    const stats = {
+      total: result.rows.length,
+      completed: result.rows.filter(d => d.status === 'completed').length,
+      failed: result.rows.filter(d => d.status === 'failed').length,
+      pending: result.rows.filter(d => d.status === 'pending').length,
+      in_progress: result.rows.filter(d => d.status === 'in_progress').length,
+    };
+
+    res.json({
+      video_id: id,
+      stats,
+      deployments: result.rows
+    });
+  } catch (error) {
+    logger.error('Error fetching video deployments:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération de l\'historique des déploiements' });
+  }
+};
+
 export const createVideo = async (req: AuthRequest, res: Response) => {
   try {
     const file = req.file;
