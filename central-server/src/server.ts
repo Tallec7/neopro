@@ -13,6 +13,8 @@ import dotenv from 'dotenv';
 import logger from './config/logger';
 import pool from './config/database';
 import socketService from './services/socket.service';
+import metricsService from './services/metrics.service';
+import healthService from './services/health.service';
 
 import authRoutes from './routes/auth.routes';
 import mfaRoutes from './routes/mfa.routes';
@@ -115,6 +117,23 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   next();
 });
 
+// Métriques Prometheus (avant les autres routes pour capturer toutes les requêtes)
+app.use(metricsService.httpMetricsMiddleware());
+
+// Endpoint métriques Prometheus (non rate-limited pour le scraping)
+app.get('/metrics', async (_req: Request, res: Response) => {
+  try {
+    // Mettre à jour les métriques snapshot
+    metricsService.recordConnectedSites(socketService.getConnectionCount());
+
+    res.set('Content-Type', metricsService.getContentType());
+    res.send(await metricsService.getMetrics());
+  } catch (error) {
+    logger.error('Error generating metrics:', error);
+    res.status(500).send('Error generating metrics');
+  }
+});
+
 app.get('/', (_req: Request, res: Response) => {
   res.json({
     service: 'NEOPRO Central Server',
@@ -137,64 +156,32 @@ try {
   logger.warn('Could not load OpenAPI documentation:', error);
 }
 
+// Health check complet avec toutes les dépendances
 app.get('/health', async (_req: Request, res: Response) => {
-  const startTime = Date.now();
-  const health: {
-    status: 'healthy' | 'degraded' | 'unhealthy';
-    timestamp: string;
-    version: string;
-    uptime: number;
-    memory: NodeJS.MemoryUsage;
-    checks: {
-      database: { status: string; latencyMs: number };
-      sockets: { connected: number; status: string };
-    };
-  } = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.0.0',
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    checks: {
-      database: { status: 'unknown', latencyMs: 0 },
-      sockets: { connected: 0, status: 'unknown' },
-    },
-  };
-
-  // Check database
-  const dbStart = Date.now();
   try {
-    await pool.query('SELECT 1');
-    health.checks.database = { status: 'ok', latencyMs: Date.now() - dbStart };
+    const health = await healthService.getHealth();
+    const httpStatus = health.status === 'healthy' ? 200 : health.status === 'degraded' ? 200 : 503;
+    res.status(httpStatus).json(health);
   } catch (error) {
-    health.checks.database = { status: 'error', latencyMs: Date.now() - dbStart };
-    health.status = 'degraded';
-    logger.error('Health check - database failed:', error);
+    logger.error('Health check failed:', error);
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: 'Health check failed',
+    });
   }
+});
 
-  // Check sockets
-  try {
-    const connectedSites = socketService.getConnectionCount();
-    health.checks.sockets = {
-      connected: connectedSites,
-      status: 'ok',
-    };
-  } catch (error) {
-    health.checks.sockets = { connected: 0, status: 'error' };
-    health.status = 'degraded';
-  }
+// Liveness probe (Kubernetes) - simple check que le process est vivant
+app.get('/live', (_req: Request, res: Response) => {
+  res.json(healthService.getLiveness());
+});
 
-  // Determine overall status
-  const allChecksOk = Object.values(health.checks).every(
-    (check) => check.status === 'ok'
-  );
-
-  if (!allChecksOk) {
-    health.status = 'degraded';
-  }
-
-  const httpStatus = health.status === 'healthy' ? 200 : 503;
-  res.status(httpStatus).json(health);
+// Readiness probe (Kubernetes) - vérifie que l'app est prête pour le trafic
+app.get('/ready', async (_req: Request, res: Response) => {
+  const readiness = await healthService.getReadiness();
+  const httpStatus = readiness.status === 'ready' ? 200 : 503;
+  res.status(httpStatus).json(readiness);
 });
 
 // Rate limiters spécifiques par type d'endpoint
