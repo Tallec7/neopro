@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { query } from '../config/database';
 import { AuthRequest } from '../types';
 import logger from '../config/logger';
+import { auditService } from '../services/audit.service';
 
 class HttpError extends Error {
   constructor(public status: number, message: string) {
@@ -147,6 +148,9 @@ export const createSite = async (req: AuthRequest, res: Response) => {
 
     logger.info('Site created', { siteId: id, siteName: uniqueSiteName, createdBy: req.user?.email });
 
+    // Audit log
+    auditService.logSiteCreated(id, uniqueSiteName, req);
+
     // Return the plain API key only once at creation time
     // IMPORTANT: L'utilisateur doit sauvegarder cette clé, elle ne sera plus jamais affichée
     res.status(201).json({
@@ -234,6 +238,9 @@ export const deleteSite = async (req: AuthRequest, res: Response) => {
 
     logger.info('Site deleted', { siteId: id, siteName: result.rows[0].site_name, deletedBy: req.user?.email });
 
+    // Audit log
+    auditService.logSiteDeleted(id, result.rows[0].site_name, req);
+
     res.json({ message: 'Site supprimé avec succès' });
   } catch (error) {
     logger.error('Delete site error:', error);
@@ -258,6 +265,9 @@ export const regenerateApiKey = async (req: AuthRequest, res: Response) => {
     }
 
     logger.info('API key regenerated', { siteId: id, regeneratedBy: req.user?.email });
+
+    // Audit log
+    auditService.logApiKeyRegenerated(id, req);
 
     // Return the new plain API key only once
     // IMPORTANT: L'utilisateur doit sauvegarder cette clé, elle ne sera plus jamais affichée

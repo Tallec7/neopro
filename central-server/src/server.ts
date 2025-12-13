@@ -17,6 +17,7 @@ import groupsRoutes from './routes/groups.routes';
 import contentRoutes from './routes/content.routes';
 import updatesRoutes from './routes/updates.routes';
 import analyticsRoutes from './routes/analytics.routes';
+import auditRoutes from './routes/audit.routes';
 
 dotenv.config();
 
@@ -183,6 +184,7 @@ app.use('/api/groups', groupsRoutes);
 app.use('/api', contentRoutes);
 app.use('/api', updatesRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/audit', auditRoutes);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({

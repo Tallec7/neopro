@@ -12,6 +12,7 @@ const ConfigWatcher = require('./watchers/config-watcher');
 const expirationChecker = require('./tasks/expiration-checker');
 const syncHistory = require('./services/sync-history');
 const offlineQueue = require('./services/offline-queue');
+const localBackup = require('./tasks/local-backup');
 
 class NeoproSyncAgent {
   constructor() {
@@ -44,6 +45,9 @@ class NeoproSyncAgent {
 
     // Démarrer le vérificateur d'expiration des vidéos
     expirationChecker.start();
+
+    // Démarrer le backup automatique quotidien
+    localBackup.start();
 
     this.connect();
 
