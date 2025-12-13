@@ -108,9 +108,10 @@ class VideoDeployHandler {
 
       await this.downloadFile(videoUrl, targetPath, progressCallback);
 
-      // Vérifier le checksum si fourni
+      // Vérifier le checksum (OBLIGATOIRE pour garantir l'intégrité)
+      const downloadedChecksum = await calculateFileChecksum(targetPath);
+
       if (checksum) {
-        const downloadedChecksum = await calculateFileChecksum(targetPath);
         if (downloadedChecksum !== checksum) {
           // Supprimer le fichier corrompu
           await fs.remove(targetPath);
@@ -120,7 +121,8 @@ class VideoDeployHandler {
         }
         logger.info('Checksum verified successfully', { checksum: downloadedChecksum });
       } else {
-        logger.warn('No checksum provided, skipping verification');
+        // Générer et logger le checksum même si non fourni (pour traçabilité)
+        logger.warn('No checksum provided by central, computed locally', { computedChecksum: downloadedChecksum });
       }
 
       const finalVideoData = {
@@ -149,34 +151,79 @@ class VideoDeployHandler {
     }
   }
 
+  /**
+   * Télécharge un fichier avec support de reprise (resume)
+   * @param {string} url URL du fichier
+   * @param {string} targetPath Chemin de destination
+   * @param {function} progressCallback Callback pour le progrès
+   */
   async downloadFile(url, targetPath, progressCallback) {
+    const tempPath = `${targetPath}.downloading`;
+    let startByte = 0;
+    let totalSize = 0;
+
     try {
+      // Vérifier si un téléchargement partiel existe
+      if (await fs.pathExists(tempPath)) {
+        const stats = await fs.stat(tempPath);
+        startByte = stats.size;
+        logger.info('Resuming download from byte', { startByte, tempPath });
+      }
+
+      // Headers pour la reprise
+      const headers = startByte > 0 ? { Range: `bytes=${startByte}-` } : {};
+
       const response = await axios({
         method: 'GET',
         url,
         responseType: 'stream',
         timeout: 600000,
         maxContentLength: config.security.maxDownloadSize,
-        onDownloadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            if (progressCallback) {
-              progressCallback(progress);
-            }
-          }
-        },
+        headers,
       });
 
-      const writer = fs.createWriteStream(targetPath);
+      // Calculer la taille totale
+      const contentLength = parseInt(response.headers['content-length'] || '0', 10);
+      const contentRange = response.headers['content-range'];
+
+      if (contentRange) {
+        // Format: bytes 0-999/1000
+        const match = contentRange.match(/\/(\d+)$/);
+        totalSize = match ? parseInt(match[1], 10) : contentLength + startByte;
+      } else {
+        totalSize = contentLength + startByte;
+      }
+
+      // Ouvrir le fichier en mode append si reprise
+      const writer = fs.createWriteStream(tempPath, { flags: startByte > 0 ? 'a' : 'w' });
+      let downloadedBytes = startByte;
+
+      response.data.on('data', (chunk) => {
+        downloadedBytes += chunk.length;
+        if (totalSize > 0 && progressCallback) {
+          const progress = Math.round((downloadedBytes / totalSize) * 100);
+          progressCallback(progress);
+        }
+      });
 
       response.data.pipe(writer);
 
-      return new Promise((resolve, reject) => {
+      await new Promise((resolve, reject) => {
         writer.on('finish', resolve);
         writer.on('error', reject);
       });
+
+      // Renommer le fichier temporaire en fichier final
+      await fs.rename(tempPath, targetPath);
+
+      logger.info('Download completed', {
+        totalSize,
+        resumed: startByte > 0,
+        resumedFrom: startByte,
+      });
     } catch (error) {
       logger.error('Download failed:', error);
+      // Ne pas supprimer le fichier temporaire pour permettre la reprise
       throw new Error(`Failed to download video: ${error.message}`);
     }
   }

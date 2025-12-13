@@ -118,24 +118,63 @@ app.get('/', (_req: Request, res: Response) => {
 });
 
 app.get('/health', async (_req: Request, res: Response) => {
+  const startTime = Date.now();
+  const health: {
+    status: 'healthy' | 'degraded' | 'unhealthy';
+    timestamp: string;
+    version: string;
+    uptime: number;
+    memory: NodeJS.MemoryUsage;
+    checks: {
+      database: { status: string; latencyMs: number };
+      sockets: { connected: number; status: string };
+    };
+  } = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    checks: {
+      database: { status: 'unknown', latencyMs: 0 },
+      sockets: { connected: 0, status: 'unknown' },
+    },
+  };
+
+  // Check database
+  const dbStart = Date.now();
   try {
     await pool.query('SELECT 1');
-
-    res.json({
-      status: 'healthy',
-      database: 'connected',
-      uptime: process.uptime(),
-      memory: process.memoryUsage(),
-      connectedSites: socketService.getConnectionCount(),
-    });
+    health.checks.database = { status: 'ok', latencyMs: Date.now() - dbStart };
   } catch (error) {
-    logger.error('Health check failed:', error);
-    res.status(503).json({
-      status: 'unhealthy',
-      database: 'disconnected',
-      error: 'Database connection failed',
-    });
+    health.checks.database = { status: 'error', latencyMs: Date.now() - dbStart };
+    health.status = 'degraded';
+    logger.error('Health check - database failed:', error);
   }
+
+  // Check sockets
+  try {
+    const connectedSites = socketService.getConnectionCount();
+    health.checks.sockets = {
+      connected: connectedSites,
+      status: 'ok',
+    };
+  } catch (error) {
+    health.checks.sockets = { connected: 0, status: 'error' };
+    health.status = 'degraded';
+  }
+
+  // Determine overall status
+  const allChecksOk = Object.values(health.checks).every(
+    (check) => check.status === 'ok'
+  );
+
+  if (!allChecksOk) {
+    health.status = 'degraded';
+  }
+
+  const httpStatus = health.status === 'healthy' ? 200 : 503;
+  res.status(httpStatus).json(health);
 });
 
 app.use('/api/auth', authRoutes);

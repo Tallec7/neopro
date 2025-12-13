@@ -9,6 +9,8 @@ const commands = require('./commands');
 const analyticsCollector = require('./analytics');
 const { calculateConfigHash } = require('./utils/config-merge');
 const ConfigWatcher = require('./watchers/config-watcher');
+const expirationChecker = require('./tasks/expiration-checker');
+const syncHistory = require('./services/sync-history');
 
 class NeoproSyncAgent {
   constructor() {
@@ -38,6 +40,9 @@ class NeoproSyncAgent {
     // Démarrer l'envoi des analytics immédiatement (indépendant du WebSocket)
     // Les analytics sont envoyées via HTTP, pas besoin d'attendre la connexion WS
     this.startAnalyticsSync();
+
+    // Démarrer le vérificateur d'expiration des vidéos
+    expirationChecker.start();
 
     this.connect();
 
@@ -76,9 +81,12 @@ class NeoproSyncAgent {
   }
 
   handleAuthenticated(data) {
-    logger.info('✅ Authenticated successfully', data);
+    logger.info('Authenticated successfully', data);
 
     this.connected = true;
+
+    // Enregistrer la connexion dans l'historique
+    syncHistory.recordConnection(true, { siteId: config.site.id });
 
     // Envoyer l'état local au central (miroir)
     this.syncLocalState();
@@ -158,6 +166,9 @@ class NeoproSyncAgent {
     logger.warn('Disconnected from central server', { reason });
 
     this.connected = false;
+
+    // Enregistrer la déconnexion dans l'historique
+    syncHistory.recordConnection(false, { reason });
 
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);

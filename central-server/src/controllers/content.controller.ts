@@ -1,11 +1,19 @@
 import { Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import crypto from 'crypto';
 import logger from '../config/logger';
 import pool from '../config/database';
 import { AuthRequest } from '../types';
 import deploymentService from '../services/deployment.service';
 import { uploadFile, deleteFile } from '../config/supabase';
+
+/**
+ * Calcule le checksum SHA256 d'un buffer
+ */
+function calculateChecksum(buffer: Buffer): string {
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
 
 export const getVideos = async (req: AuthRequest, res: Response) => {
   try {
@@ -72,6 +80,9 @@ export const createVideo = async (req: AuthRequest, res: Response) => {
     const ext = path.extname(file.originalname);
     const filename = `${uniqueId}${ext}`;
 
+    // Calculer le checksum SHA256 pour vérification d'intégrité
+    const checksum = calculateChecksum(file.buffer);
+
     // Upload vers Supabase Storage
     const uploadResult = await uploadFile(file.buffer, filename, file.mimetype);
 
@@ -86,10 +97,10 @@ export const createVideo = async (req: AuthRequest, res: Response) => {
     const mime_type = file.mimetype;
 
     const result = await pool.query(
-      `INSERT INTO videos (filename, original_name, category, subcategory, file_size, mime_type, storage_path, metadata, uploaded_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING id, filename as name, original_name, category, subcategory, file_size as size, duration, storage_path as url, thumbnail_url, metadata, created_at, updated_at`,
-      [filename, original_name, category || null, subcategory || null, file_size, mime_type, uploadResult.path, { title: videoTitle }, req.user?.id || null]
+      `INSERT INTO videos (filename, original_name, category, subcategory, file_size, mime_type, storage_path, checksum, metadata, uploaded_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, filename as name, original_name, category, subcategory, file_size as size, duration, storage_path as url, thumbnail_url, checksum, metadata, created_at, updated_at`,
+      [filename, original_name, category || null, subcategory || null, file_size, mime_type, uploadResult.path, checksum, { title: videoTitle }, req.user?.id || null]
     );
 
     // Ajouter le titre et l'URL à la réponse pour l'affichage client
@@ -97,7 +108,7 @@ export const createVideo = async (req: AuthRequest, res: Response) => {
     video.title = videoTitle;
     video.url = uploadResult.url;
 
-    logger.info('Video created:', { id: video.id, filename, title: videoTitle, storagePath: uploadResult.path });
+    logger.info('Video created:', { id: video.id, filename, title: videoTitle, storagePath: uploadResult.path, checksum });
     res.status(201).json(video);
   } catch (error) {
     logger.error('Error creating video:', error);

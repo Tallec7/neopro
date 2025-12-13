@@ -34,6 +34,7 @@ interface DeploymentRow {
   subcategory: string | null;
   duration: number | null;
   storage_path: string;
+  checksum: string | null;
   metadata: { title?: string } | null;
 }
 
@@ -46,7 +47,7 @@ class DeploymentService {
     try {
       // Récupérer les infos du déploiement
       const deploymentResult = await query(
-        `SELECT cd.*, v.filename, v.original_name, v.category, v.subcategory, v.duration, v.storage_path, v.metadata
+        `SELECT cd.*, v.filename, v.original_name, v.category, v.subcategory, v.duration, v.storage_path, v.checksum, v.metadata
          FROM content_deployments cd
          JOIN videos v ON cd.video_id = v.id
          WHERE cd.id = $1`,
@@ -119,7 +120,7 @@ class DeploymentService {
     try {
       // Récupérer les déploiements pending qui ciblent ce site (directement ou via un groupe)
       const result = await query(
-        `SELECT cd.id, cd.video_id, v.filename, v.original_name, v.category, v.subcategory, v.duration, v.storage_path, v.metadata
+        `SELECT cd.id, cd.video_id, v.filename, v.original_name, v.category, v.subcategory, v.duration, v.storage_path, v.checksum, v.metadata
          FROM content_deployments cd
          JOIN videos v ON cd.video_id = v.id
          WHERE cd.status IN ('pending', 'in_progress')
@@ -224,6 +225,7 @@ class DeploymentService {
         category: deployment.category || 'default',
         subcategory: deployment.subcategory || null,
         duration: deployment.duration || 0,
+        checksum: deployment.checksum || null, // Checksum SHA256 pour vérification d'intégrité
       }
     };
 
@@ -231,6 +233,7 @@ class DeploymentService {
       siteId,
       videoUrl,
       storagePath: deployment.storage_path,
+      checksum: deployment.checksum,
     });
 
     return socketService.sendCommand(siteId, command);
@@ -455,7 +458,7 @@ class DeploymentService {
       // Récupérer les déploiements en pending qui ont des erreurs (en attente de retry)
       const result = await query(
         `SELECT cd.id, cd.video_id, cd.error_message, cd.target_type, cd.target_id,
-                v.filename, v.original_name, v.category, v.subcategory, v.duration, v.storage_path, v.metadata
+                v.filename, v.original_name, v.category, v.subcategory, v.duration, v.storage_path, v.checksum, v.metadata
          FROM content_deployments cd
          JOIN videos v ON cd.video_id = v.id
          WHERE cd.status = 'pending'
