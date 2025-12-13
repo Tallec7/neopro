@@ -3,10 +3,11 @@ import * as sitesController from '../controllers/sites.controller';
 import * as configHistoryController from '../controllers/config-history.controller';
 import { authenticate, requireRole } from '../middleware/auth';
 import { validate, schemas } from '../middleware/validation';
+import { paginationMiddleware } from '../middleware/pagination';
 
 const router = Router();
 
-router.get('/', authenticate, sitesController.getSites);
+router.get('/', authenticate, paginationMiddleware, sitesController.getSites);
 
 router.get('/stats', authenticate, sitesController.getSiteStats);
 

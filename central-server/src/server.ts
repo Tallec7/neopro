@@ -18,6 +18,7 @@ import contentRoutes from './routes/content.routes';
 import updatesRoutes from './routes/updates.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import auditRoutes from './routes/audit.routes';
+import { authRateLimit, apiRateLimit, sensitiveRateLimit } from './middleware/user-rate-limit';
 
 dotenv.config();
 
@@ -178,13 +179,15 @@ app.get('/health', async (_req: Request, res: Response) => {
   res.status(httpStatus).json(health);
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/sites', sitesRoutes);
-app.use('/api/groups', groupsRoutes);
-app.use('/api', contentRoutes);
-app.use('/api', updatesRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/audit', auditRoutes);
+// Rate limiters spécifiques par type d'endpoint
+app.use('/api/auth', authRateLimit, authRoutes); // Restrictif pour auth
+app.use('/api/sites', apiRateLimit, sitesRoutes);
+app.use('/api/groups', apiRateLimit, groupsRoutes);
+app.use('/api/videos', sensitiveRateLimit); // Upload de vidéos - plus restrictif
+app.use('/api', apiRateLimit, contentRoutes);
+app.use('/api', sensitiveRateLimit, updatesRoutes); // Mises à jour - sensible
+app.use('/api/analytics', apiRateLimit, analyticsRoutes);
+app.use('/api/audit', apiRateLimit, auditRoutes);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({
@@ -207,18 +210,21 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-socketService.initialize(httpServer);
-
 const startServer = async () => {
   try {
+    // Tester la connexion à la base de données
     await pool.query('SELECT NOW()');
     logger.info('Database connection established');
+
+    // Initialiser Socket.IO (avec Redis si configuré)
+    await socketService.initialize(httpServer);
 
     httpServer.listen(PORT, () => {
       logger.info(`🚀 NEOPRO Central Server démarré`, {
         port: PORT,
         environment: NODE_ENV,
         processId: process.pid,
+        redisEnabled: socketService.isRedisConnected(),
       });
       logger.info(`API disponible sur http://localhost:${PORT}`);
       logger.info(`WebSocket disponible sur ws://localhost:${PORT}`);
@@ -233,6 +239,7 @@ process.on('SIGTERM', async () => {
   logger.info('SIGTERM signal received: closing HTTP server');
   httpServer.close(async () => {
     logger.info('HTTP server closed');
+    await socketService.cleanup();
     await pool.end();
     logger.info('Database pool closed');
     process.exit(0);

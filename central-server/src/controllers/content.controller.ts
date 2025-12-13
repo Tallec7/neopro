@@ -7,6 +7,7 @@ import pool from '../config/database';
 import { AuthRequest } from '../types';
 import deploymentService from '../services/deployment.service';
 import { uploadFile, deleteFile } from '../config/supabase';
+import { formatPaginatedResponse } from '../middleware/pagination';
 
 /**
  * Calcule le checksum SHA256 d'un buffer
@@ -17,21 +18,51 @@ function calculateChecksum(buffer: Buffer): string {
 
 export const getVideos = async (req: AuthRequest, res: Response) => {
   try {
-    const result = await pool.query(
-      `SELECT id, filename, original_name, category, subcategory,
-              file_size, duration, storage_path as url,
-              thumbnail_url, metadata, created_at, updated_at
-       FROM videos
-       ORDER BY created_at DESC`
-    );
+    const { category, search } = req.query;
+    const pagination = req.pagination || { page: 1, limit: 20, offset: 0 };
+
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (category) {
+      whereClause += ` AND category = $${paramIndex}`;
+      params.push(category);
+      paramIndex++;
+    }
+
+    if (search) {
+      whereClause += ` AND (original_name ILIKE $${paramIndex} OR filename ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    // Requêtes paginée et count en parallèle
+    const dataQuery = `
+      SELECT id, filename, original_name, category, subcategory,
+             file_size, duration, storage_path as url,
+             thumbnail_url, metadata, created_at, updated_at
+      FROM videos
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    const countQuery = `SELECT COUNT(*) as count FROM videos ${whereClause}`;
+
+    const [dataResult, countResult] = await Promise.all([
+      pool.query(dataQuery, [...params, pagination.limit, pagination.offset]),
+      pool.query(countQuery, params),
+    ]);
 
     // Ajouter le titre depuis les metadata ou utiliser original_name
-    const videos = result.rows.map(video => ({
+    const videos = dataResult.rows.map(video => ({
       ...video,
       title: (video.metadata as { title?: string })?.title || video.original_name || video.filename
     }));
 
-    res.json(videos);
+    const total = parseInt((countResult.rows[0] as any)?.count || '0', 10);
+
+    res.json(formatPaginatedResponse(videos, total, pagination));
   } catch (error) {
     logger.error('Error fetching videos:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des vidéos' });

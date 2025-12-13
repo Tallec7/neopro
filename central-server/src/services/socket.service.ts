@@ -2,6 +2,8 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient, RedisClientType } from 'redis';
 import { query } from '../config/database';
 import { SocketData, CommandMessage, CommandResult, HeartbeatMessage } from '../types';
 import logger from '../config/logger';
@@ -61,8 +63,10 @@ class SocketService {
   private connectedSites: Map<string, Socket> = new Map();
   private pendingCommands: Map<string, PendingCommand> = new Map();
   private timeoutCheckInterval: NodeJS.Timeout | null = null;
+  private redisClient: RedisClientType | null = null;
+  private redisSub: RedisClientType | null = null;
 
-  initialize(httpServer: HTTPServer) {
+  async initialize(httpServer: HTTPServer) {
     this.io = new SocketIOServer(httpServer, {
       cors: {
         origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
@@ -72,12 +76,71 @@ class SocketService {
       transports: ['websocket', 'polling'],
     });
 
+    // Configuration Redis pour scalabilité horizontale
+    await this.setupRedisAdapter();
+
     this.io.on('connection', this.handleConnection.bind(this));
 
     // Démarrer la vérification périodique des timeouts de commandes
     this.startCommandTimeoutChecker();
 
     logger.info('Socket.IO service initialized');
+  }
+
+  /**
+   * Configure l'adapter Redis pour Socket.IO
+   * Permet le scaling horizontal en partageant l'état des sockets entre instances
+   */
+  private async setupRedisAdapter(): Promise<void> {
+    const redisUrl = process.env.REDIS_URL;
+
+    if (!redisUrl) {
+      logger.warn('REDIS_URL not configured - Socket.IO running in single-instance mode');
+      logger.warn('For horizontal scaling, set REDIS_URL environment variable');
+      return;
+    }
+
+    try {
+      // Créer les clients pub/sub pour Redis
+      this.redisClient = createClient({ url: redisUrl });
+      this.redisSub = this.redisClient.duplicate();
+
+      // Gérer les erreurs de connexion
+      this.redisClient.on('error', (err) => {
+        logger.error('Redis pub client error:', err);
+      });
+      this.redisSub.on('error', (err) => {
+        logger.error('Redis sub client error:', err);
+      });
+
+      // Connecter les clients
+      await Promise.all([
+        this.redisClient.connect(),
+        this.redisSub.connect(),
+      ]);
+
+      // Configurer l'adapter Redis
+      if (this.io) {
+        this.io.adapter(createAdapter(this.redisClient, this.redisSub));
+      }
+
+      logger.info('Socket.IO Redis adapter configured for horizontal scaling', {
+        redisUrl: redisUrl.replace(/\/\/.*@/, '//***@'), // Masquer les credentials
+      });
+    } catch (error) {
+      logger.error('Failed to setup Redis adapter:', error);
+      logger.warn('Falling back to single-instance mode');
+
+      // Nettoyer en cas d'erreur
+      if (this.redisClient) {
+        try { await this.redisClient.quit(); } catch { /* ignore */ }
+        this.redisClient = null;
+      }
+      if (this.redisSub) {
+        try { await this.redisSub.quit(); } catch { /* ignore */ }
+        this.redisSub = null;
+      }
+    }
   }
 
   /**
@@ -693,13 +756,40 @@ class SocketService {
   /**
    * Arrête le service proprement (pour les tests et le shutdown)
    */
-  cleanup() {
+  async cleanup() {
     if (this.timeoutCheckInterval) {
       clearInterval(this.timeoutCheckInterval);
       this.timeoutCheckInterval = null;
     }
     this.pendingCommands.clear();
     this.connectedSites.clear();
+
+    // Fermer les connexions Redis
+    if (this.redisClient) {
+      try {
+        await this.redisClient.quit();
+        this.redisClient = null;
+      } catch (error) {
+        logger.error('Error closing Redis pub client:', error);
+      }
+    }
+    if (this.redisSub) {
+      try {
+        await this.redisSub.quit();
+        this.redisSub = null;
+      } catch (error) {
+        logger.error('Error closing Redis sub client:', error);
+      }
+    }
+
+    logger.info('Socket service cleaned up');
+  }
+
+  /**
+   * Vérifie si Redis est connecté
+   */
+  isRedisConnected(): boolean {
+    return this.redisClient !== null && this.redisClient.isOpen;
   }
 }
 

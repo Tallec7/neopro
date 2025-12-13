@@ -6,6 +6,7 @@ import { query } from '../config/database';
 import { AuthRequest } from '../types';
 import logger from '../config/logger';
 import { auditService } from '../services/audit.service';
+import { formatPaginatedResponse, PaginationParams } from '../middleware/pagination';
 
 class HttpError extends Error {
   constructor(public status: number, message: string) {
@@ -38,43 +39,48 @@ export const verifyApiKey = async (apiKey: string, hash: string): Promise<boolea
 export const getSites = async (req: AuthRequest, res: Response) => {
   try {
     const { status, sport, region, search } = req.query;
+    const pagination = req.pagination || { page: 1, limit: 20, offset: 0 };
 
-    let sqlQuery = 'SELECT * FROM sites WHERE 1=1';
+    let whereClause = 'WHERE 1=1';
     const params: any[] = [];
     let paramIndex = 1;
 
     if (status) {
-      sqlQuery += ` AND status = $${paramIndex}`;
+      whereClause += ` AND status = $${paramIndex}`;
       params.push(status);
       paramIndex++;
     }
 
     if (sport) {
-      sqlQuery += ` AND sports @> $${paramIndex}::jsonb`;
+      whereClause += ` AND sports @> $${paramIndex}::jsonb`;
       params.push(JSON.stringify([sport]));
       paramIndex++;
     }
 
     if (region) {
-      sqlQuery += ` AND location->>'region' = $${paramIndex}`;
+      whereClause += ` AND location->>'region' = $${paramIndex}`;
       params.push(region);
       paramIndex++;
     }
 
     if (search) {
-      sqlQuery += ` AND (site_name ILIKE $${paramIndex} OR club_name ILIKE $${paramIndex})`;
+      whereClause += ` AND (site_name ILIKE $${paramIndex} OR club_name ILIKE $${paramIndex})`;
       params.push(`%${search}%`);
       paramIndex++;
     }
 
-    sqlQuery += ' ORDER BY created_at DESC';
+    // Requêtes paginée et count en parallèle
+    const dataQuery = `SELECT * FROM sites ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    const countQuery = `SELECT COUNT(*) as count FROM sites ${whereClause}`;
 
-    const result = await query(sqlQuery, params);
+    const [dataResult, countResult] = await Promise.all([
+      query(dataQuery, [...params, pagination.limit, pagination.offset]),
+      query(countQuery, params),
+    ]);
 
-    res.json({
-      total: result.rows.length,
-      sites: result.rows,
-    });
+    const total = parseInt((countResult.rows[0] as any)?.count || '0', 10);
+
+    res.json(formatPaginatedResponse(dataResult.rows, total, pagination));
   } catch (error) {
     logger.error('Get sites error:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des sites' });
