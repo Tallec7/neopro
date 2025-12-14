@@ -1,6 +1,6 @@
-# Avancement Analytics Sponsors - 14 Décembre 2025 (Mise à jour)
+# Avancement Analytics Sponsors - 14 Décembre 2025 (Semaine 1 & 2 Complètes)
 
-## ✅ RÉALISÉ (Backend MVP + Frontend Dashboard)
+## ✅ RÉALISÉ (Backend + Frontend + Tracking Boîtiers)
 
 ### Backend Complet (100%) ✅
 
@@ -69,9 +69,55 @@
 - ✅ FormsModule intégré pour bindings
 - ✅ Build Angular réussi (warnings seulement)
 
+### Tracking Boîtiers TV (100%) ✅
+
+**Frontend Raspberry (Angular)** : `raspberry/frontend/app/services/sponsor-analytics.service.ts`
+- ✅ Service tracking impressions sponsors
+- ✅ Buffer local (localStorage) + auto-flush
+- ✅ Interface SponsorImpression complète
+- ✅ Méthodes: trackSponsorStart/End, setEventType, setPeriod, setAudienceEstimate
+- ✅ Envoi périodique (5min) ou automatique (50 impressions)
+- ✅ Retry avec backoff en cas d'échec
+
+**TV Component Modifié** : `raspberry/frontend/app/components/tv/tv.component.ts`
+- ✅ Injection SponsorAnalyticsService
+- ✅ Tracking automatique lecture vidéos sponsors
+- ✅ Distinction auto/manual triggers
+- ✅ Méthodes publiques: setEventContext, updatePeriod, updateAudienceEstimate
+- ✅ Integration avec analytics existant
+
+**Serveur Local (Express)** : `raspberry/server/server.js`
+- ✅ POST /api/sync/sponsor-impressions - Reçoit impressions frontend
+- ✅ GET /api/sync/sponsor-impressions/stats - Stats buffer local
+- ✅ Stockage ~/neopro/data/sponsor_impressions.json
+- ✅ Forward automatique vers central en mode cloud (Render)
+- ✅ Gestion erreurs avec logs détaillés
+
+**Sync Agent** : `raspberry/sync-agent/src/sponsor-impressions.js`
+- ✅ Nouveau module SponsorImpressionsCollector
+- ✅ Chargement buffer au démarrage
+- ✅ Envoi périodique vers /api/analytics/impressions
+- ✅ startPeriodicSync() avec interval configurable
+- ✅ Persistance fichier avec retry logic
+- ✅ Méthodes: loadBuffer, saveBuffer, addImpressions, sendToServer
+
+**Sync Agent Intégration** : `raspberry/sync-agent/src/agent.js`
+- ✅ Import et démarrage automatique sponsorImpressionsCollector
+- ✅ Méthode startSponsorImpressionsSync()
+- ✅ API publique: addSponsorImpressions(), getSponsorImpressionsStats()
+- ✅ Indépendant WebSocket (HTTP-based)
+
+**Documentation** : `docs/TRACKING_IMPRESSIONS_SPONSORS.md`
+- ✅ Guide implémentation complet
+- ✅ Architecture détaillée avec diagramme
+- ✅ Flux de données end-to-end
+- ✅ Guide utilisation et configuration
+- ✅ Tests manuels et troubleshooting
+- ✅ Métriques et dimensionnement
+
 ---
 
-## ⏳ À TERMINER (Tracking + PDF Graphiques)
+## ⏳ RESTANT (PDF Graphiques - Optionnel)
 
 ### Frontend Dashboard (TERMINÉ) ✅
 
@@ -122,51 +168,9 @@ npm install @angular/forms # Si pas déjà présent
 }
 ```
 
-### Tracking Impressions Boîtiers (2-3 jours)
+### ~~Tracking Impressions Boîtiers~~ (TERMINÉ) ✅
 
-**Service TV** : `raspberry/frontend/app/services/sponsor-analytics.service.ts`
-```typescript
-export class SponsorAnalyticsService {
-  private buffer: SponsorImpression[] = [];
-  private readonly BATCH_INTERVAL = 5 * 60 * 1000; // 5 min
-
-  trackImpression(video, context) {
-    // Buffer impression
-    // Flush automatique toutes les 5 min ou si buffer > 50
-  }
-
-  private async flushBuffer() {
-    // Envoyer via sync-agent
-  }
-}
-```
-
-**Intégration TV Component** : `raspberry/frontend/app/components/tv/tv.component.ts`
-```typescript
-// Dans onVideoPlay
-this.sponsorAnalytics.trackImpression({
-  videoId: video.id,
-  playedAt: new Date(),
-  durationPlayed: 0,
-  videoDuration: video.duration,
-  completed: false,
-  eventType: this.currentEventType, // 'match' | 'training'
-  period: this.currentPeriod,       // 'pre_match' | etc.
-  triggerType: 'manual',            // ou 'auto'
-  audienceEstimate: this.audienceEstimate
-});
-
-// Dans onVideoEnd
-this.sponsorAnalytics.updateImpression({
-  completed: true,
-  durationPlayed: actualDuration
-});
-```
-
-**Sync Agent** : `raspberry/sync-agent/src/sync.service.ts`
-- Recevoir impressions du frontend
-- Buffer local (SQLite pour offline mode)
-- POST vers `/api/analytics/impressions` toutes les 5 min
+Implémentation complète documentée dans `docs/TRACKING_IMPRESSIONS_SPONSORS.md`
 - Retry logic avec exponential backoff
 
 ### PDF Graphiques (3-4 jours)
@@ -193,9 +197,9 @@ npm install chartjs-node-canvas
 |-------|-------------------|---------|
 | **Avant implémentation** | 0% 🔴 | Rien |
 | **Après Backend MVP** | 60% 🟠 | Backend complet, frontend starter |
-| **Après Frontend complet (ACTUEL)** | 80% 🟢 | ✅ Dashboard Angular complet avec Chart.js |
-| **Après Tracking** | 90% 🟢 | + Impressions boîtiers (TODO) |
-| **Après PDF graphiques** | 95% ✅ | Complet (TODO) |
+| **Après Frontend complet** | 80% 🟢 | Dashboard Angular complet avec Chart.js |
+| **Après Tracking (ACTUEL)** | 90% 🟢 | ✅ Impressions boîtiers complètes |
+| **Après PDF graphiques (Optionnel)** | 95% ✅ | Rendu graphique PDFs |
 
 ---
 
@@ -206,11 +210,10 @@ npm install chartjs-node-canvas
 - **✅ J3-4** : sponsor-analytics.component.ts avec Chart.js (3 graphiques + tables)
 - **✅ J5** : sponsor-videos.component.ts + routes (drag & drop fonctionnel)
 
-### ⏳ Semaine 2 (Jours 6-10) - À FAIRE
-- **⏳ J6-7** : Tracking service + intégration TV
-- **⏳ J8** : Sync-agent modifications
-- **⏳ J9** : Tests end-to-end
-- **⏳ J10** : Buffer
+### ✅ Semaine 2 (Jours 6-8) - TERMINÉ
+- **✅ J6** : sponsor-analytics.service.ts (tracking frontend) + tv.component.ts modifications
+- **✅ J7** : server.js (API endpoints) + sponsor-impressions.js (sync-agent collector)
+- **✅ J8** : agent.js intégration + documentation complète (TRACKING_IMPRESSIONS_SPONSORS.md)
 
 ### 🔵 Semaine 3 (Jours 11-14) - Optionnel
 - **🔵 J11-13** : PDF graphiques avec PDFKit
@@ -284,17 +287,14 @@ neopro/
 1. `feat(analytics): implement sponsor analytics module (BP §13)` - Backend complet
 2. `feat(analytics): add PDF reports and implementation guide` - PDF + docs
 3. `feat(sponsors): add Angular dashboard starter component` - Frontend liste
-4. `feat(sponsors): complete frontend dashboard with Chart.js visualizations` - **Dashboard complet ✅**
+4. `feat(sponsors): complete frontend dashboard with Chart.js visualizations` - Dashboard complet
+5. `feat(analytics): implement sponsor impression tracking from TV devices` - **Tracking boîtiers ✅**
 
 ---
 
 ## 📞 Prochaines Étapes
 
-**Week 2 - Tracking Impressions (2-3 jours)** :
-1. Créer `sponsor-analytics.service.ts` dans raspberry frontend
-2. Intégrer tracking dans `tv.component.ts` (onPlay, onEnd, onInterrupt)
-3. Modifier `sync-agent` pour buffer et POST impressions
-4. Tester end-to-end avec données réelles
+**~~Week 2 - Tracking Impressions~~** : ✅ TERMINÉ
 
 **Week 3 - PDF Graphiques (Optionnel, 3-4 jours)** :
 1. Installer PDFKit et chartjs-node-canvas
@@ -310,5 +310,5 @@ neopro/
 ---
 
 **Date** : 14 Décembre 2025
-**Status** : ✅ Backend MVP Complet + Frontend Dashboard Complet (80% conformité)
-**Prochaine révision** : Après implémentation tracking boîtiers (J+7)
+**Status** : ✅ Backend + Frontend + Tracking Complets (90% conformité BP §13)
+**Prochaine révision** : Après tests terrain avec données réelles (J+14)
