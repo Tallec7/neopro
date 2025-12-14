@@ -12,6 +12,8 @@ import {
   recordImpressions,
   exportSponsorData,
   calculateDailyStats,
+  generateSponsorPdfReport,
+  generateClubPdfReport,
 } from '../controllers/sponsor-analytics.controller';
 
 const router = express.Router();
@@ -89,6 +91,22 @@ router.get(
   '/sponsors/:id/export',
   authenticate,
   exportSponsorData
+);
+
+// Générer un rapport PDF pour un sponsor
+// Query params: ?from=YYYY-MM-DD&to=YYYY-MM-DD
+router.get(
+  '/sponsors/:id/report/pdf',
+  authenticate,
+  generateSponsorPdfReport
+);
+
+// Générer un rapport PDF pour un club
+// Query params: ?from=YYYY-MM-DD&to=YYYY-MM-DD
+router.get(
+  '/clubs/:siteId/report/pdf',
+  authenticate,
+  generateClubPdfReport
 );
 
 // Recevoir un batch d'impressions (depuis sync-agent via API key auth)

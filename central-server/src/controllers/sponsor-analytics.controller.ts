@@ -3,6 +3,7 @@ import { query } from '../config/database';
 import { AuthRequest } from '../types';
 import logger from '../config/logger';
 import { validate as validateUuid } from 'uuid';
+import { generateSponsorReport, generateClubReport } from '../services/pdf-report.service';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -764,6 +765,78 @@ export const calculateDailyStats = async (req: AuthRequest, res: Response): Prom
     res.status(500).json({
       success: false,
       error: 'Failed to calculate daily stats',
+    });
+  }
+};
+
+/**
+ * GET /api/analytics/sponsors/:id/report/pdf
+ * Générer un rapport PDF pour un sponsor
+ */
+export const generateSponsorPdfReport = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { from, to } = req.query;
+
+    if (!validateUuid(id)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid sponsor ID',
+      });
+      return;
+    }
+
+    const fromDate = (from as string) || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const toDate = (to as string) || new Date().toISOString().split('T')[0];
+
+    // Générer le PDF
+    const pdfBuffer = await generateSponsorReport(id, fromDate, toDate, { type: 'sponsor' });
+
+    // Envoyer le PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=sponsor-report-${id}-${fromDate}-${toDate}.pdf`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    logger.error('Error generating sponsor PDF:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate PDF report',
+    });
+  }
+};
+
+/**
+ * GET /api/analytics/clubs/:siteId/report/pdf
+ * Générer un rapport PDF pour un club
+ */
+export const generateClubPdfReport = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { siteId } = req.params;
+    const { from, to } = req.query;
+
+    if (!validateUuid(siteId)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid site ID',
+      });
+      return;
+    }
+
+    const fromDate = (from as string) || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const toDate = (to as string) || new Date().toISOString().split('T')[0];
+
+    // Générer le PDF
+    const pdfBuffer = await generateClubReport(siteId, fromDate, toDate, { type: 'club' });
+
+    // Envoyer le PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=club-report-${siteId}-${fromDate}-${toDate}.pdf`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    logger.error('Error generating club PDF:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate PDF report',
     });
   }
 };
