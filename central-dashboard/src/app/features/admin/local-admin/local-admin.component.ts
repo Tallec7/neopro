@@ -154,7 +154,7 @@ import { AdminActionType, AdminJob, LocalClient } from '../../../core/models/adm
           <div>
             <p class="eyebrow">Clients</p>
             <h2>Liste locale</h2>
-            <p class="subtitle">Entrées mémorisées côté front en attendant l'API.</p>
+            <p class="subtitle">Données servies par l'API locale avec persistance disque.</p>
           </div>
         </div>
         <div class="clients" *ngIf="clients().length; else emptyClients">
@@ -438,6 +438,7 @@ export class LocalAdminComponent implements OnInit, OnDestroy {
         .refreshState()
         .subscribe({ next: () => this.loading.set(false), error: () => this.loading.set(false) })
     );
+    this.adminOps.initJobStream();
     this.subscriptions.push(
       this.adminOps.getJobs().subscribe(jobs => this.jobs.set(jobs)),
       this.adminOps.getClients().subscribe(clients => this.clients.set(clients))
@@ -446,6 +447,7 @@ export class LocalAdminComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub.unsubscribe());
+    this.adminOps.teardownStreams();
   }
 
   submitAction(): void {

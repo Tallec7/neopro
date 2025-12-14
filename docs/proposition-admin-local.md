@@ -85,9 +85,8 @@
 
 ## État d'avancement par rapport à la proposition
 
-- **Implémenté (itération actuelle)** : option A engagée côté front avec une page `/admin/local` dans `central-dashboard` et un service Angular `AdminOpsService` en mode stub (store en mémoire, simulations de jobs/clients, formulaires validés côté front). Aucun backend ni exécution réelle de scripts n'est encore branché.
+- **Implémenté (itération actuelle)** : option A engagée côté front avec une page `/admin/local` dans `central-dashboard` et un service Angular `AdminOpsService` connecté à l'API `/api/admin`. Les jobs/clients sont validés côté serveur, persistés sur disque (`data/admin-state.json`) et diffusés en live via SSE pour le suivi des jobs. Les formulaires front restent en mode stub (pas d'exécution réelle des scripts).
 - **Restant à faire** :
-  - Créer l'API d'orchestration sécurisée (`POST /api/admin/jobs`, `POST /api/admin/clients`, streaming des logs) et brancher `AdminOpsService` dessus.
-  - Mettre en place l'auth locale + ACL spécifique aux actions sensibles (install/purge) et confirmer les actions critiques côté UI.
-  - Persister l'historique des jobs/logs (fichier ou store léger) et fournir le monitoring temps réel (SSE/WebSocket).
-  - Ajouter les tests front/back pour couvrir les validations, les échecs API, et les scénarios de long-running jobs.
+  - Activer les actions sensibles (install/purge) avec ACL et confirmations renforcées.
+  - Ajouter un endpoint de purge/rotation pour l'historique et brancher l'exécution réelle des scripts whitelistes.
+  - Ajouter des tests front/back pour couvrir les validations, les échecs API, et les scénarios de long-running jobs, ainsi que la résilience du flux SSE.

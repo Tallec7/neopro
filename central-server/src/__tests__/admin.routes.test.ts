@@ -1,17 +1,36 @@
 import request from 'supertest';
-import { app, httpServer } from '../server';
+import path from 'path';
+import fs from 'fs';
 import { generateToken } from '../middleware/auth';
-import { adminOpsService } from '../services/admin-ops.service';
+
+let app: import('express').Express;
+let httpServer: import('http').Server;
+let adminOpsService: typeof import('../services/admin-ops.service').adminOpsService;
+let stateFile: string;
 
 const adminToken = generateToken({ id: 'user-1', email: 'admin@example.com', role: 'admin' });
 const authHeader = { Authorization: `Bearer ${adminToken}` };
 
 describe('Admin routes', () => {
+  beforeAll(async () => {
+    stateFile = path.resolve(__dirname, '../../tmp/admin-state.test.json');
+    fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+    fs.rmSync(stateFile, { force: true });
+    process.env.ADMIN_STATE_FILE = stateFile;
+
+    const server = await import('../server');
+    app = server.app;
+    httpServer = server.httpServer;
+    const adminServiceModule = await import('../services/admin-ops.service');
+    adminOpsService = adminServiceModule.adminOpsService;
+  });
+
   beforeEach(() => {
     adminOpsService.resetForTests();
   });
 
   afterAll(done => {
+    fs.rmSync(stateFile, { force: true });
     httpServer.close(done);
   });
 
@@ -35,6 +54,17 @@ describe('Admin routes', () => {
     expect(response.status).toBe(201);
     expect(response.body.job.action).toBe('build:central');
     expect(response.body.job.status).toBe('queued');
+  });
+
+  it('should persist jobs to disk', async () => {
+    await request(app)
+      .post('/api/admin/jobs')
+      .set(authHeader)
+      .send({ action: 'build:central', parameters: { target: 'dev-local' } });
+
+    const persisted = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+    expect(Array.isArray(persisted.jobs)).toBe(true);
+    expect(persisted.jobs.length).toBeGreaterThanOrEqual(1);
   });
 
   it('should refuse an unknown action', async () => {

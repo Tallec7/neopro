@@ -4,6 +4,7 @@ import { catchError, map, tap } from 'rxjs/operators';
 import { AdminActionRequest, AdminJob, AdminActionType, LocalClient, LocalClientInput } from '../models/admin';
 import { NotificationService } from './notification.service';
 import { ApiService } from './api.service';
+import { environment } from '@env/environment';
 
 @Injectable({ providedIn: 'root' })
 export class AdminOpsService {
@@ -11,6 +12,7 @@ export class AdminOpsService {
   private readonly notifications = inject(NotificationService);
   private jobs$ = new BehaviorSubject<AdminJob[]>([]);
   private clients$ = new BehaviorSubject<LocalClient[]>([]);
+  private jobEventSource?: EventSource;
 
   getJobs(): Observable<AdminJob[]> {
     return this.jobs$.asObservable();
@@ -36,6 +38,35 @@ export class AdminOpsService {
       tap(() => this.notifications.info('Données admin locales synchronisées')),
       map(() => undefined)
     );
+  }
+
+  initJobStream(): void {
+    if (typeof EventSource === 'undefined' || this.jobEventSource) {
+      return;
+    }
+
+    const token = localStorage.getItem('neopro_token');
+    const url = token
+      ? `${environment.apiUrl}/admin/jobs/stream?token=${encodeURIComponent(token)}`
+      : `${environment.apiUrl}/admin/jobs/stream`;
+
+    const source = new EventSource(url, { withCredentials: true });
+    source.addEventListener('seed', event => {
+      const payload = JSON.parse((event as MessageEvent).data) as AdminJob[];
+      this.jobs$.next(payload);
+    });
+
+    source.addEventListener('job-update', event => {
+      const payload = JSON.parse((event as MessageEvent).data) as AdminJob;
+      this.jobs$.next(this.upsertJob(payload));
+    });
+
+    source.onerror = () => {
+      this.notifications.error('Flux de jobs interrompu');
+      this.teardownStreams();
+    };
+
+    this.jobEventSource = source;
   }
 
   triggerAction(request: AdminActionRequest): Observable<AdminJob> {
@@ -99,5 +130,21 @@ export class AdminOpsService {
       default:
         return action;
     }
+  }
+
+  teardownStreams(): void {
+    if (this.jobEventSource) {
+      this.jobEventSource.close();
+      this.jobEventSource = undefined;
+    }
+  }
+
+  private upsertJob(job: AdminJob): AdminJob[] {
+    const existing = this.jobs$.value.find(current => current.id === job.id);
+    if (!existing) {
+      return [job, ...this.jobs$.value];
+    }
+
+    return this.jobs$.value.map(current => (current.id === job.id ? job : current));
   }
 }

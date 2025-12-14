@@ -1,7 +1,9 @@
 import { randomUUID } from 'crypto';
 import Joi from 'joi';
+import EventEmitter from 'events';
 import logger from '../config/logger';
 import { AdminActionRequest, AdminActionType, AdminJob, LocalClient, LocalClientInput } from '../types/admin';
+import { AdminState, AdminStateStore } from './admin-state.store';
 
 const ALLOWED_ACTIONS: AdminActionType[] = [
   'build:central',
@@ -47,15 +49,21 @@ const actionSchema = Joi.object<AdminActionRequest>({
 });
 
 class AdminOpsService {
-  private jobs: AdminJob[] = [];
-  private clients: LocalClient[] = [...DEFAULT_CLIENTS];
+  private readonly store: AdminStateStore;
+  private readonly events = new EventEmitter();
+  private state: AdminState;
+
+  constructor(store = new AdminStateStore()) {
+    this.store = store;
+    this.state = this.store.load({ jobs: [], clients: [...DEFAULT_CLIENTS] });
+  }
 
   listJobs(): AdminJob[] {
-    return this.jobs;
+    return this.state.jobs;
   }
 
   listClients(): LocalClient[] {
-    return this.clients;
+    return this.state.clients;
   }
 
   triggerAction(request: AdminActionRequest, requestedBy: string): AdminJob {
@@ -77,7 +85,9 @@ class AdminOpsService {
       logs: [`${now.toISOString()} • Demande reçue pour ${value.action}`],
     };
 
-    this.jobs = [job, ...this.jobs];
+    this.state = { ...this.state, jobs: [job, ...this.state.jobs] };
+    this.persist();
+    this.events.emit('job', job);
     this.simulateProgress(job.id);
     return job;
   }
@@ -97,12 +107,13 @@ class AdminOpsService {
       status: 'active',
     };
 
-    this.clients = [client, ...this.clients];
+    this.state = { ...this.state, clients: [client, ...this.state.clients] };
+    this.persist();
     return client;
   }
 
   syncClient(clientId: string): LocalClient {
-    const existing = this.clients.find((client) => client.id === clientId);
+    const existing = this.state.clients.find((client) => client.id === clientId);
     if (!existing) {
       throw new Error('Client not found');
     }
@@ -113,7 +124,11 @@ class AdminOpsService {
       status: 'active',
     };
 
-    this.clients = this.clients.map((client) => (client.id === clientId ? updated : client));
+    this.state = {
+      ...this.state,
+      clients: this.state.clients.map((client) => (client.id === clientId ? updated : client)),
+    };
+    this.persist();
     return updated;
   }
 
@@ -137,29 +152,46 @@ class AdminOpsService {
 
   private updateJob(jobId: string, patch: Partial<AdminJob>): void {
     const updatedAt = patch.updatedAt ?? new Date().toISOString();
-    this.jobs = this.jobs.map((job) =>
-      job.id === jobId
-        ? {
-            ...job,
-            ...patch,
-            logs: patch.logs ?? job.logs,
-            updatedAt,
-          }
-        : job
-    );
+    this.state = {
+      ...this.state,
+      jobs: this.state.jobs.map((job) =>
+        job.id === jobId
+          ? {
+              ...job,
+              ...patch,
+              logs: patch.logs ?? job.logs,
+              updatedAt,
+            }
+          : job
+      ),
+    };
+    const updatedJob = this.findJob(jobId);
+    if (updatedJob) {
+      this.events.emit('job', updatedJob);
+    }
+    this.persist();
     logger.debug('Job updated', { jobId, status: patch.status });
   }
 
   private findJob(jobId: string): AdminJob | undefined {
-    return this.jobs.find((job) => job.id === jobId);
+    return this.state.jobs.find((job) => job.id === jobId);
   }
 
   /**
    * Utility reserved for test suites to reset the in-memory state
    */
   resetForTests(): void {
-    this.jobs = [];
-    this.clients = [...DEFAULT_CLIENTS];
+    this.state = { jobs: [], clients: [...DEFAULT_CLIENTS] };
+    this.store.reset(this.state);
+  }
+
+  subscribeToJobs(listener: (job: AdminJob) => void): () => void {
+    this.events.on('job', listener);
+    return () => this.events.off('job', listener);
+  }
+
+  private persist(): void {
+    this.store.persist(this.state);
   }
 }
 

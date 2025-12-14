@@ -13,6 +13,7 @@ describe('AdminOpsService', () => {
     'error',
     'info'
   ]);
+  const originalEventSource = (global as typeof globalThis).EventSource;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -25,6 +26,7 @@ describe('AdminOpsService', () => {
 
   afterEach(() => {
     httpMock.verify();
+    (global as typeof globalThis).EventSource = originalEventSource;
   });
 
   it('should load jobs and clients from the API', done => {
@@ -79,5 +81,49 @@ describe('AdminOpsService', () => {
     const syncRequest = httpMock.expectOne(req => req.url.includes('/admin/clients/client-1/sync'));
     expect(syncRequest.request.method).toBe('POST');
     syncRequest.flush({ client: { id: 'client-1', name: 'Test', code: 'test', status: 'active', createdAt: '' } });
+  });
+
+  it('should hydrate jobs from SSE stream and close it on teardown', done => {
+    const listeners: Record<string, Array<(event: MessageEvent<string>) => void>> = {};
+    let closed = false;
+
+    class MockEventSource {
+      constructor(public url: string, public options?: EventSourceInit) {}
+      addEventListener(type: string, callback: (event: MessageEvent<string>) => void) {
+        listeners[type] = listeners[type] || [];
+        listeners[type].push(callback);
+      }
+      close() {
+        closed = true;
+      }
+    }
+
+    (global as typeof globalThis).EventSource = MockEventSource as unknown as typeof EventSource;
+
+    service.initJobStream();
+
+    listeners['seed'][0]({
+      data: JSON.stringify([
+        { id: 'job-1', action: 'build:central' as AdminActionType, status: 'queued', createdAt: '', updatedAt: '', requestedBy: 'me' }
+      ]),
+    } as MessageEvent<string>);
+
+    listeners['job-update'][0]({
+      data: JSON.stringify({
+        id: 'job-1',
+        action: 'build:central' as AdminActionType,
+        status: 'running',
+        createdAt: '',
+        updatedAt: '',
+        requestedBy: 'me',
+      }),
+    } as MessageEvent<string>);
+
+    service.getJobs().subscribe(jobs => {
+      expect(jobs[0].status).toBe('running');
+      service.teardownStreams();
+      expect(closed).toBeTrue();
+      done();
+    });
   });
 });
