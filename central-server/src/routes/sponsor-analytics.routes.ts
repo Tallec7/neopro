@@ -33,7 +33,7 @@ router.get(
 router.post(
   '/sponsors',
   authenticate,
-  requireRole(['admin', 'operator']),
+  requireRole('admin', 'operator'),
   createSponsor
 );
 
@@ -41,7 +41,7 @@ router.post(
 router.put(
   '/sponsors/:id',
   authenticate,
-  requireRole(['admin', 'operator']),
+  requireRole('admin', 'operator'),
   updateSponsor
 );
 
@@ -49,7 +49,7 @@ router.put(
 router.delete(
   '/sponsors/:id',
   authenticate,
-  requireRole(['admin']),
+  requireRole('admin'),
   deleteSponsor
 );
 
@@ -61,7 +61,7 @@ router.delete(
 router.post(
   '/sponsors/:id/videos',
   authenticate,
-  requireRole(['admin', 'operator']),
+  requireRole('admin', 'operator'),
   addVideosToSponsor
 );
 
@@ -69,7 +69,7 @@ router.post(
 router.delete(
   '/sponsors/:id/videos/:videoId',
   authenticate,
-  requireRole(['admin', 'operator']),
+  requireRole('admin', 'operator'),
   removeVideoFromSponsor
 );
 
@@ -122,7 +122,7 @@ router.post(
 router.post(
   '/sponsors/calculate-daily-stats',
   authenticate,
-  requireRole(['admin']),
+  requireRole('admin'),
   calculateDailyStats
 );
 
