@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { NotificationService } from '../../core/services/notification.service';
 
@@ -18,7 +19,7 @@ interface Sponsor {
 @Component({
   selector: 'app-sponsors-list',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, FormsModule],
   template: `
     <div class="sponsors-list-container">
       <div class="header">
@@ -542,8 +543,16 @@ export class SponsorsListComponent implements OnInit {
   async loadSponsors() {
     this.loading = true;
     try {
-      const response = await this.api.get('/analytics/sponsors');
-      this.sponsors = response.data.sponsors || [];
+      const response = await fetch('/api/analytics/sponsors', {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement');
+      }
+
+      const data = await response.json();
+      this.sponsors = data.data.sponsors || [];
       this.filteredSponsors = this.sponsors;
     } catch (error) {
       this.notification.error('Erreur lors du chargement des sponsors');
@@ -612,13 +621,26 @@ export class SponsorsListComponent implements OnInit {
     this.saving = true;
 
     try {
-      if (this.isEditing && this.formData.id) {
-        await this.api.put(`/analytics/sponsors/${this.formData.id}`, this.formData);
-        this.notification.success('Sponsor modifié avec succès');
-      } else {
-        await this.api.post('/analytics/sponsors', this.formData);
-        this.notification.success('Sponsor créé avec succès');
+      const url = this.isEditing && this.formData.id
+        ? `/api/analytics/sponsors/${this.formData.id}`
+        : '/api/analytics/sponsors';
+
+      const method = this.isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(this.formData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors de l\'enregistrement');
       }
+
+      this.notification.success(
+        this.isEditing ? 'Sponsor modifié avec succès' : 'Sponsor créé avec succès'
+      );
 
       this.closeModal();
       await this.loadSponsors();
