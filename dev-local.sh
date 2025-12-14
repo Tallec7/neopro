@@ -149,14 +149,14 @@ else
 fi
 
 # 2. Démarrer l'interface admin (mode démo)
-echo -e "${GREEN}[2/5]${NC} Démarrage Admin Interface (port 8080)..."
+echo -e "${GREEN}[2/5]${NC} Démarrage Admin Interface (port 8081)..."
 cd raspberry/admin
 if [ "$ADMIN_MODE" = "demo" ]; then
     echo "→ Mode DEMO (données mockées, pas d'écriture disque)"
-    node admin-server-demo.js > ../../logs/admin.log 2>&1 &
+    ADMIN_PORT=8081 node admin-server-demo.js > ../../logs/admin.log 2>&1 &
 else
     echo "→ Mode RÉEL (uploads stockés dans ${ROOT_DIR}/public/videos)"
-    NEOPRO_DIR="${ROOT_DIR}/public" node admin-server.js > ../../logs/admin.log 2>&1 &
+    ADMIN_PORT=8081 NEOPRO_DIR="${ROOT_DIR}/public" node admin-server.js > ../../logs/admin.log 2>&1 &
 fi
 PID_ADMIN=$!
 cd ../..
@@ -220,7 +220,7 @@ echo "   • TV:     http://localhost:4200/tv"
 echo "   • Remote: http://localhost:4200/remote"
 echo ""
 echo -e "${BLUE}🎛️  Admin Interface (MODE DEMO):${NC}"
-echo "   • Dashboard: http://localhost:8080"
+echo "   • Dashboard: http://localhost:8081"
 if [ "$ADMIN_MODE" = "demo" ]; then
     echo "   • Données mockées, aucun fichier écrit (lancer ./dev-local.sh real pour tester les uploads)"
 else
