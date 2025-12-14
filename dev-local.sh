@@ -134,9 +134,9 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 # 1. Démarrer le serveur Socket.IO
-echo -e "${GREEN}[1/5]${NC} Démarrage Socket.IO server (port 3000)..."
+echo -e "${GREEN}[1/5]${NC} Démarrage Socket.IO server (port 3003)..."
 cd server-render
-node server.js > ../logs/socket.log 2>&1 &
+PORT=3003 node server.js > ../logs/socket.log 2>&1 &
 PID_SOCKET=$!
 cd ..
 sleep 2
@@ -229,7 +229,7 @@ else
 fi
 echo ""
 echo -e "${BLUE}🔌 Socket.IO Server:${NC}"
-echo "   • Port: 3000"
+echo "   • Port: 3003"
 echo ""
 echo -e "${BLUE}🛠️  Central Server:${NC}"
 echo "   • API:    http://localhost:3001/api"
