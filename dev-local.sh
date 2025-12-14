@@ -258,5 +258,7 @@ echo ""
 echo -e "${YELLOW}Appuyez sur Ctrl+C pour arrêter tous les services${NC}"
 echo ""
 
-# Garder le script actif
-wait $PID_ANGULAR
+# Garder le script actif indéfiniment
+while true; do
+    sleep 1
+done
