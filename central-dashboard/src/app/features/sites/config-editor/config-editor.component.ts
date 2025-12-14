@@ -1928,7 +1928,8 @@ export class ConfigEditorComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.reloadConfig();
     this.loadHistoryCount();
-    this.loadAnalyticsCategories();
+    // Temporarily disabled to debug spinner issue
+    // this.loadAnalyticsCategories();
   }
 
   ngOnDestroy(): void {
@@ -1964,6 +1965,7 @@ export class ConfigEditorComponent implements OnInit, OnDestroy {
   }
 
   reloadConfig(): void {
+    console.log('[ConfigEditor] reloadConfig() called, siteId:', this.siteId);
     this.loading = true;
     this.configPollSubscription?.unsubscribe();
 
@@ -1978,13 +1980,17 @@ export class ConfigEditorComponent implements OnInit, OnDestroy {
       }
     }, 10000);
 
+    console.log('[ConfigEditor] Calling getConfiguration...');
     this.sitesService.getConfiguration(this.siteId).subscribe({
       next: (response) => {
+        console.log('[ConfigEditor] getConfiguration response:', response);
         clearTimeout(timeoutId);
         if (response.commandId) {
           this.configCommandId = response.commandId;
+          console.log('[ConfigEditor] Starting poll with commandId:', response.commandId);
           this.pollConfigResult();
         } else {
+          console.log('[ConfigEditor] No commandId in response');
           this.loading = false;
           this.config = this.getEmptyConfig();
           this.originalConfig = null;
@@ -1993,26 +1999,31 @@ export class ConfigEditorComponent implements OnInit, OnDestroy {
         }
       },
       error: (error) => {
+        console.error('[ConfigEditor] getConfiguration error:', error);
         clearTimeout(timeoutId);
         this.loading = false;
         this.config = this.getEmptyConfig();
         this.originalConfig = null;
         this.syncJsonFromConfig();
         this.notificationService.warning('Erreur de connexion. Vous pouvez créer une nouvelle configuration.');
-        console.error('getConfiguration error:', error);
       }
     });
   }
 
   private pollConfigResult(): void {
-    if (!this.configCommandId) return;
+    if (!this.configCommandId) {
+      console.log('[ConfigEditor] pollConfigResult: no commandId, aborting');
+      return;
+    }
 
     const POLL_TIMEOUT_SECONDS = 30;
     let pollCount = 0;
     let isPolling = false; // Éviter les appels parallèles
 
+    console.log('[ConfigEditor] Starting polling interval...');
     this.configPollSubscription = interval(1000).subscribe(() => {
       pollCount++;
+      console.log('[ConfigEditor] Poll tick #', pollCount, 'isPolling:', isPolling);
 
       // Timeout après 30 secondes
       if (pollCount > POLL_TIMEOUT_SECONDS) {
@@ -2026,14 +2037,22 @@ export class ConfigEditorComponent implements OnInit, OnDestroy {
       }
 
       // Éviter les appels parallèles si le précédent n'est pas terminé
-      if (isPolling) return;
+      if (isPolling) {
+        console.log('[ConfigEditor] Skipping poll - previous request still pending');
+        return;
+      }
       isPolling = true;
 
+      console.log('[ConfigEditor] Calling getCommandStatus for:', this.configCommandId);
       this.sitesService.getCommandStatus(this.siteId, this.configCommandId!).subscribe({
         next: (status) => {
+          console.log('[ConfigEditor] getCommandStatus response:', JSON.stringify(status).substring(0, 500));
           isPolling = false;
           if (status.status === 'completed') {
+            console.log('[ConfigEditor] Status is completed, result:', status.result ? 'present' : 'missing');
+            console.log('[ConfigEditor] result.configuration:', status.result?.configuration ? 'present' : 'missing');
             this.configPollSubscription?.unsubscribe();
+
             this.loading = false;
 
             if (status.result?.configuration) {
@@ -2045,7 +2064,6 @@ export class ConfigEditorComponent implements OnInit, OnDestroy {
               this.syncJsonFromConfig();
               this.notificationService.info('Aucune configuration sur le site. Créez-en une nouvelle.');
             } else {
-              // Réponse inattendue, permettre de créer une config
               this.config = this.getEmptyConfig();
               this.originalConfig = null;
               this.syncJsonFromConfig();
@@ -2058,53 +2076,66 @@ export class ConfigEditorComponent implements OnInit, OnDestroy {
             this.originalConfig = null;
             this.syncJsonFromConfig();
             this.notificationService.warning('Échec de récupération. Vous pouvez créer une nouvelle configuration.');
+          } else {
+            console.log('[ConfigEditor] Status is:', status.status, '- continuing poll');
           }
           // Si status === 'pending', on continue le polling
         },
         error: (error) => {
+          console.error('[ConfigEditor] getCommandStatus error:', error);
           isPolling = false;
           // Ne pas arrêter le polling sur une erreur réseau ponctuelle
           // Le timeout global s'en chargera
-          console.error('getCommandStatus error:', error);
         }
       });
     });
   }
 
   private setConfig(configuration: SiteConfiguration): void {
-    // Normalize categories to ensure videos and subCategories arrays exist
-    const normalizedCategories = (configuration.categories || []).map(cat => ({
-      ...cat,
-      videos: cat.videos || [],
-      subCategories: (cat.subCategories || []).map(subcat => ({
-        ...subcat,
-        videos: subcat.videos || [],
-      })),
-    }));
+    try {
+      console.log('[ConfigEditor] setConfig() START');
+      // Normalize categories to ensure videos and subCategories arrays exist
+      const normalizedCategories = (configuration.categories || []).map(cat => ({
+        ...cat,
+        videos: cat.videos || [],
+        subCategories: (cat.subCategories || []).map(subcat => ({
+          ...subcat,
+          videos: subcat.videos || [],
+        })),
+      }));
+      console.log('[ConfigEditor] normalizedCategories:', normalizedCategories.length);
 
-    // Normalize timeCategories - use config values or defaults
-    const defaultTimeCategories = this.getEmptyConfig().timeCategories!;
-    const normalizedTimeCategories = configuration.timeCategories?.length
-      ? configuration.timeCategories.map(tc => ({
-          ...tc,
-          categoryIds: tc.categoryIds || [],
-        }))
-      : defaultTimeCategories;
+      // Normalize timeCategories - use config values or defaults
+      const defaultTimeCategories = this.getEmptyConfig().timeCategories!;
+      const normalizedTimeCategories = configuration.timeCategories?.length
+        ? configuration.timeCategories.map(tc => ({
+            ...tc,
+            categoryIds: tc.categoryIds || [],
+          }))
+        : defaultTimeCategories;
+      console.log('[ConfigEditor] normalizedTimeCategories:', normalizedTimeCategories.length);
 
-    this.config = {
-      ...this.getEmptyConfig(),
-      ...configuration,
-      remote: { ...this.getEmptyConfig().remote, ...configuration.remote },
-      auth: { ...this.getEmptyConfig().auth, ...configuration.auth },
-      sync: { ...this.getEmptyConfig().sync, ...configuration.sync },
-      sponsors: configuration.sponsors || [],
-      categories: normalizedCategories,
-      timeCategories: normalizedTimeCategories,
-    };
-    this.originalConfig = JSON.parse(JSON.stringify(this.config));
-    this.syncJsonFromConfig();
-    this.hasChanges = false;
-    this.validate();
+      this.config = {
+        ...this.getEmptyConfig(),
+        ...configuration,
+        remote: { ...this.getEmptyConfig().remote, ...configuration.remote },
+        auth: { ...this.getEmptyConfig().auth, ...configuration.auth },
+        sync: { ...this.getEmptyConfig().sync, ...configuration.sync },
+        sponsors: configuration.sponsors || [],
+        categories: normalizedCategories,
+        timeCategories: normalizedTimeCategories,
+      };
+      console.log('[ConfigEditor] this.config set');
+      this.originalConfig = JSON.parse(JSON.stringify(this.config));
+      console.log('[ConfigEditor] originalConfig set');
+      this.syncJsonFromConfig();
+      console.log('[ConfigEditor] syncJsonFromConfig done');
+      this.hasChanges = false;
+      this.validate();
+      console.log('[ConfigEditor] setConfig() COMPLETE - loading should be false now:', this.loading);
+    } catch (error) {
+      console.error('[ConfigEditor] setConfig() ERROR:', error);
+    }
   }
 
   private syncJsonFromConfig(): void {
