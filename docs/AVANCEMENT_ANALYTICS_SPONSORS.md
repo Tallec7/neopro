@@ -197,67 +197,70 @@
 
 ---
 
-## ⏳ RESTANT (Améliorations Futures)
+## 🔮 AMÉLIORATIONS FUTURES (Optionnel)
 
-### Frontend Dashboard (TERMINÉ) ✅
+### Phase 4 - Tests & Optimisations (2-3 jours)
 
-1. **sponsor-detail.component.ts** (2 jours)
-   - Détail sponsor avec tabs
-   - Onglet: Informations générales
-   - Onglet: Vidéos associées
-   - Onglet: Analytics
-   - Actions: Éditer, Supprimer, Exporter
+**Tests Automatisés** :
+- [ ] Tests unitaires service PDF (Jest)
+  - Validation génération Buffer
+  - Validation signature SHA-256
+  - Tests formatDate/formatNumber/formatDuration
+- [ ] Tests intégration API endpoints
+  - Tests CRUD sponsors
+  - Tests génération PDF (endpoint /api/sponsors/:id/report)
+  - Tests enregistrement impressions
+- [ ] Tests e2e dashboard Angular (Cypress)
+  - Création sponsor
+  - Navigation composants
+  - Téléchargement PDF
 
-2. **sponsor-analytics.component.ts** (2 jours)
-   - KPIs cards (impressions, temps écran, complétion, reach)
-   - Graphique Chart.js tendances quotidiennes
-   - Tableau top vidéos
-   - Tableau top sites/clubs
-   - Pie charts répartition (période, événement)
-   - Filtres période (7j, 30j, 3 mois, custom)
-   - Boutons Export CSV + PDF
+**Optimisations Performance** :
+- [ ] Cache Redis pour graphiques fréquents
+  - Clé: `chart:${sponsorId}:${from}:${to}`
+  - TTL: 1 heure
+- [ ] Génération asynchrone PDF (Bull/BullMQ)
+  - Queue pour gros volumes
+  - Notification email quand PDF prêt
+- [ ] Compression PDF avancée
+  - Optimisation taille images
+  - Compression assets
 
-3. **sponsor-videos.component.ts** (1 jour)
-   - Liste vidéos associées au sponsor
-   - Ajouter/retirer vidéos
-   - Drag & drop pour réorganiser
+### Phase 5 - Améliorations Enterprise (1-2 semaines)
 
-**Bibliothèques nécessaires** :
-```bash
-cd central-dashboard
-npm install chart.js ng2-charts
-npm install @angular/forms # Si pas déjà présent
-```
+**Personnalisation** :
+- [ ] Upload logos personnalisés
+  - Logo sponsor (S3/Supabase Storage)
+  - Logo club sur PDF
+  - Watermarks personnalisés
+- [ ] Templates PDF personnalisables
+  - Templates par club
+  - Couleurs personnalisables
+  - Sections optionnelles
 
-**Routes à ajouter** : `central-dashboard/src/app/app.routes.ts`
-```typescript
-{
-  path: 'sponsors',
-  component: SponsorsListComponent,
-  canActivate: [authGuard]
-},
-{
-  path: 'sponsors/:id',
-  component: SponsorDetailComponent,
-  canActivate: [authGuard]
-},
-{
-  path: 'sponsors/:id/analytics',
-  component: SponsorAnalyticsComponent,
-  canActivate: [authGuard]
-}
-```
+**Fonctionnalités Avancées** :
+- [ ] Rapports multi-sponsors comparatifs
+  - Comparaison 2-5 sponsors
+  - Benchmarking performance
+  - Tableaux de bord consolidés
+- [ ] Export multi-formats
+  - Excel (xlsx) avec graphiques
+  - PowerPoint (pptx) pour présentations
+  - JSON/CSV pour analyse externe
+- [ ] Notifications automatiques
+  - Email mensuel aux sponsors
+  - Alertes seuils (ex: < 1000 impressions/mois)
+  - Rapports programmés (cron)
 
-### ~~Tracking Impressions Boîtiers~~ (TERMINÉ) ✅
-
-Implémentation complète documentée dans `docs/TRACKING_IMPRESSIONS_SPONSORS.md`
-
-### ~~PDF Graphiques~~ (TERMINÉ) ✅
-
-Implémentation complète documentée dans `docs/PDF_REPORTS_GUIDE.md`
-- Template professionnel A4 4 pages
-- Graphiques Chart.js → Canvas → PDF
-- Certificat de diffusion avec signature SHA-256
+**Analytics Avancées** :
+- [ ] Prédictions ML
+  - Prévision impressions futures
+  - Recommandations optimisation
+  - Détection anomalies
+- [ ] Segmentation audience
+  - Analyse démographique (si données disponibles)
+  - Comportement spectateurs
+  - Patterns temporels
 
 ---
 
