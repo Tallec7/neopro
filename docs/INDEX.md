@@ -1,10 +1,28 @@
 # Documentation Neopro
 
+## 🚀 PERDU ? COMMENCEZ ICI !
+
+### **[START_HERE.md](START_HERE.md)** - 🎯 Guide de Navigation
+
+**Nouveau sur le projet ?** Ce guide vous oriente selon votre profil :
+- 👨‍💻 Développeur (backend, frontend, fullstack)
+- 🎯 Chef de projet / Product Owner
+- 🏗️ Ops / Installation
+- 🆘 Dépannage
+
+**Inclut** :
+- Parcours recommandés par profil
+- Navigation par mot-clé
+- Documents à ignorer (obsolètes)
+- Checklist "Je suis prêt"
+
+---
+
 ## 📖 Documents principaux
 
 ### Pour utiliser Neopro
 
-1. **[README.md](../README.md)** - **COMMENCER ICI**
+1. **[README.md](../README.md)** - Documentation Utilisateur
    - Configuration nouveau club
    - Mise à jour boîtier
    - Accès rapide aux interfaces
