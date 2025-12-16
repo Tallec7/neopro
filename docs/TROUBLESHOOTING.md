@@ -558,15 +558,39 @@ Depuis le **dashboard central**, vous pouvez diagnostiquer la connectivité d'un
 
 | Test | Description | Indicateur |
 |------|-------------|------------|
-| **Internet** | Ping vers 8.8.8.8 (Google DNS) | Connectivité générale |
-| **Serveur central** | Ping/HTTP vers le serveur NEOPRO | Communication avec le dashboard |
-| **DNS** | Résolution de google.com | Fonctionnement du DNS |
+| **Internet** | Ping vers 8.8.8.8 (5 paquets) | Connectivité générale + perte de paquets |
+| **Serveur central** | Ping, HTTP, port 443, SSL | Communication complète avec le dashboard |
+| **DNS** | Résolution de google.com | Fonctionnement du DNS + IP résolue |
 | **Passerelle** | Ping vers la gateway locale | Connexion au routeur |
 
-#### Informations affichées
+#### Informations détaillées affichées
 
-- **WiFi** (si applicable) : SSID, qualité du signal (%), puissance (dBm), débit (Mb/s)
-- **Latences** : temps de réponse de chaque test en millisecondes
+**Internet :**
+- Latence ping (ms)
+- Perte de paquets (%) - utile pour détecter une connexion instable
+- Nombre de paquets envoyés/reçus
+
+**Serveur central :**
+- Latence ping (ms)
+- Latence HTTP (ms) - temps de réponse réel de l'API
+- Code HTTP (200 = OK, 4xx/5xx = erreur)
+- Port 443 (HTTPS) : Ouvert / Fermé
+- Certificat SSL : Valide / Invalide
+
+**DNS :**
+- Domaine testé (google.com)
+- IP résolue
+- Temps de résolution (ms)
+
+**WiFi** (si applicable) :
+- SSID du réseau connecté
+- Qualité du signal (%)
+- Puissance (dBm)
+- Débit (Mb/s)
+
+**Stabilité :**
+- Uptime interface réseau
+- Nombre de reconnexions (depuis le boot)
 
 > **Note** : Les adresses IP locales (192.168.x.x) ne sont pas affichées car elles ne sont pas accessibles depuis un poste distant. Seule l'IP publique du site est visible dans les informations générales.
 
@@ -579,6 +603,11 @@ Depuis le **dashboard central**, vous pouvez diagnostiquer la connectivité d'un
 | ✅ Internet, ❌ DNS | Problème de configuration DNS |
 | ✅ Internet, ❌ Serveur central | Pare-feu bloquant ou serveur indisponible |
 | Tous ✅ mais "Connexion instable" | Latence élevée ou déconnexions fréquentes |
+| Perte de paquets > 0% | Connexion WiFi faible ou réseau encombré |
+| Perte de paquets > 10% | Connexion très instable, vidéos risquent de ne pas charger |
+| Port 443 fermé | Pare-feu bloque HTTPS, WebSocket impossible |
+| SSL invalide | Certificat expiré ou problème de date système |
+| Reconnexions > 5 | Interface réseau instable (câble, WiFi...) |
 
 #### Statut de connexion temps réel
 
@@ -610,8 +639,31 @@ Le dashboard vérifie **en temps réel** si le boîtier est connecté via WebSoc
 │  ✅ DNS (15ms)                          │
 │  ✅ Passerelle (5ms)                    │
 ├─────────────────────────────────────────┤
-│  WiFi: Connecté à "BOX-CLUB"            │
-│  Qualité: 75% | Signal: -55 dBm         │
+│  Internet                               │
+│  Latence ping: 45ms                     │
+│  Perte de paquets: 0% (5/5)             │
+├─────────────────────────────────────────┤
+│  Serveur central                        │
+│  Latence ping: 120ms                    │
+│  Latence HTTP: 250ms                    │
+│  Status HTTP: 200                       │
+│  Port 443: Ouvert                       │
+│  Certificat SSL: Valide                 │
+├─────────────────────────────────────────┤
+│  DNS                                    │
+│  Domaine testé: google.com              │
+│  IP résolue: 142.250.74.238             │
+│  Temps résolution: 15ms                 │
+├─────────────────────────────────────────┤
+│  WiFi                                   │
+│  SSID: BOX-CLUB                         │
+│  Qualité: 75%                           │
+│  Signal: -55 dBm                        │
+│  Débit: 65 Mb/s                         │
+├─────────────────────────────────────────┤
+│  Stabilité                              │
+│  Uptime interface: 5j 12h 30m           │
+│  Reconnexions: 2                        │
 └─────────────────────────────────────────┘
 ```
 
