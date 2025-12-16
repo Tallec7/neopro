@@ -622,6 +622,19 @@ Le dashboard vérifie **en temps réel** si le boîtier est connecté via WebSoc
 
 > **Important** : Si le site apparaît "instable" ou "hors ligne", les boutons d'action seront désactivés. Le boîtier doit être connecté en temps réel pour exécuter des commandes à distance.
 
+#### Statut de connexion temps réel
+
+Le dashboard vérifie **en temps réel** si le boîtier est connecté via WebSocket au serveur central. Les actions à distance (logs, diagnostic, redémarrage, etc.) ne sont activées **que si** le boîtier est connecté.
+
+| Indicateur | Signification |
+|------------|---------------|
+| 🟢 **Connecté** | WebSocket actif, actions disponibles |
+| 🟡 **Instable** | Vu récemment (<2 min) mais pas de WebSocket actif |
+| 🔴 **Hors ligne** | Aucune connexion depuis >2 minutes |
+| ⚪ **Inconnu** | Jamais connecté ou données manquantes |
+
+> **Important** : Si le site apparaît "instable" ou "hors ligne", les boutons d'action seront désactivés. Le boîtier doit être connecté en temps réel pour exécuter des commandes à distance.
+
 #### WiFi : qualité du signal
 
 | Qualité | Signal (dBm) | Interprétation |
