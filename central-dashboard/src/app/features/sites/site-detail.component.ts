@@ -252,10 +252,15 @@ import { ConnectionIndicatorComponent } from '../../shared/components/connection
       <div class="card">
         <div class="card-header-row">
           <h3>Configuration Hotspot WiFi</h3>
-          <button class="btn btn-secondary" (click)="toggleHotspotConfig()" [disabled]="!isConnected">
-            {{ showHotspotConfig ? 'Masquer' : 'Modifier' }}
+          <button class="btn btn-secondary" (click)="toggleHotspotConfig()" [class.btn-queued]="!isConnected && !showHotspotConfig">
+            <ng-container *ngIf="showHotspotConfig">Masquer</ng-container>
+            <ng-container *ngIf="!showHotspotConfig && isConnected">Modifier</ng-container>
+            <ng-container *ngIf="!showHotspotConfig && !isConnected">📥 Modifier (file d'attente)</ng-container>
           </button>
         </div>
+        <p class="card-description" *ngIf="!isConnected && !showHotspotConfig">
+          <span class="queue-note">Le site est hors ligne. Les modifications seront mises en file d'attente et appliquées à la reconnexion.</span>
+        </p>
         <div *ngIf="showHotspotConfig" class="hotspot-config-form">
           <div class="form-group">
             <label for="hotspotSsid">SSID (nom du réseau WiFi)</label>
@@ -287,12 +292,18 @@ import { ConnectionIndicatorComponent } from '../../shared/components/connection
               class="btn btn-primary"
               (click)="updateHotspot()"
               [disabled]="updatingHotspot || (!hotspotSsid && !hotspotPassword)"
+              [class.btn-queued]="!isConnected"
             >
-              {{ updatingHotspot ? 'Mise à jour...' : 'Appliquer les modifications' }}
+              <ng-container *ngIf="updatingHotspot">Mise à jour...</ng-container>
+              <ng-container *ngIf="!updatingHotspot && isConnected">Appliquer les modifications</ng-container>
+              <ng-container *ngIf="!updatingHotspot && !isConnected">📥 Mettre en file d'attente</ng-container>
             </button>
           </div>
-          <div class="hotspot-warning">
+          <div class="hotspot-warning" *ngIf="isConnected">
             <strong>Attention :</strong> Après modification, vous devrez vous reconnecter au nouveau réseau WiFi pour accéder au boîtier.
+          </div>
+          <div class="hotspot-warning queue-warning" *ngIf="!isConnected">
+            <strong>Mode hors ligne :</strong> Les modifications seront appliquées automatiquement à la prochaine connexion du site.
           </div>
         </div>
       </div>
@@ -342,6 +353,7 @@ import { ConnectionIndicatorComponent } from '../../shared/components/connection
           <app-config-editor
             [siteId]="siteId"
             [siteName]="site.site_name"
+            [isConnected]="isConnected"
             (configDeployed)="onConfigDeployed()"
           ></app-config-editor>
         </div>
@@ -1437,6 +1449,12 @@ import { ConnectionIndicatorComponent } from '../../shared/components/connection
       border-left: 3px solid #2563eb;
     }
 
+    .hotspot-warning.queue-warning {
+      background: #eff6ff;
+      border-color: #2563eb;
+      color: #1e40af;
+    }
+
     @media (max-width: 768px) {
       .info-grid {
         grid-template-columns: 1fr;
@@ -1938,7 +1956,11 @@ export class SiteDetailComponent implements OnInit, OnDestroy {
     if (this.hotspotSsid) changes.push(`SSID: ${this.hotspotSsid}`);
     if (this.hotspotPassword) changes.push('Mot de passe');
 
-    if (!confirm(`Modifier la configuration du hotspot WiFi ?\n\nChangements : ${changes.join(', ')}\n\nAttention : vous devrez vous reconnecter au nouveau réseau WiFi.`)) {
+    const confirmMsg = this.isConnected
+      ? `Modifier la configuration du hotspot WiFi ?\n\nChangements : ${changes.join(', ')}\n\nAttention : vous devrez vous reconnecter au nouveau réseau WiFi.`
+      : `Modifier la configuration du hotspot WiFi ?\n\nChangements : ${changes.join(', ')}\n\nLe site est hors ligne. Les modifications seront mises en file d'attente et appliquées à la reconnexion.`;
+
+    if (!confirm(confirmMsg)) {
       return;
     }
 
@@ -1948,9 +1970,13 @@ export class SiteDetailComponent implements OnInit, OnDestroy {
       this.hotspotSsid || undefined,
       this.hotspotPassword || undefined
     ).subscribe({
-      next: (response) => {
+      next: (response: { success?: boolean; message?: string; queued?: boolean }) => {
         this.updatingHotspot = false;
-        this.notificationService.success('Configuration du hotspot mise à jour avec succès !');
+        if (response.queued) {
+          this.notificationService.success('📥 Configuration du hotspot mise en file d\'attente. Elle sera appliquée à la reconnexion du site.');
+        } else {
+          this.notificationService.success('Configuration du hotspot mise à jour avec succès !');
+        }
         this.hotspotSsid = '';
         this.hotspotPassword = '';
         this.showHotspotConfig = false;
