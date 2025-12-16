@@ -236,7 +236,9 @@ import { ConnectionIndicatorComponent } from '../../shared/components/connection
             [disabled]="updatingSyncAgent"
             [class.btn-queued]="!isConnected"
           >
-            {{ updatingSyncAgent ? 'Mise à jour en cours...' : (isConnected ? 'Mettre à jour le sync-agent' : '📥 Mettre à jour (file d\'attente)') }}
+            <ng-container *ngIf="updatingSyncAgent">Mise à jour en cours...</ng-container>
+            <ng-container *ngIf="!updatingSyncAgent && isConnected">Mettre à jour le sync-agent</ng-container>
+            <ng-container *ngIf="!updatingSyncAgent && !isConnected">📥 Mettre à jour (file d'attente)</ng-container>
           </button>
         </div>
         <p class="card-description">
@@ -327,8 +329,10 @@ import { ConnectionIndicatorComponent } from '../../shared/components/connection
       <div class="card">
         <div class="card-header-row">
           <h3>Configuration du site</h3>
-          <button class="btn btn-primary" (click)="toggleConfigEditor()" [class.btn-queued]="!isConnected">
-            {{ showConfigEditor ? 'Fermer' : (isConnected ? 'Modifier la configuration' : '📥 Modifier (file d\'attente)') }}
+          <button class="btn btn-primary" (click)="toggleConfigEditor()" [class.btn-queued]="!isConnected && !showConfigEditor">
+            <ng-container *ngIf="showConfigEditor">Fermer</ng-container>
+            <ng-container *ngIf="!showConfigEditor && isConnected">Modifier la configuration</ng-container>
+            <ng-container *ngIf="!showConfigEditor && !isConnected">📥 Modifier (file d'attente)</ng-container>
           </button>
         </div>
         <p class="card-description" *ngIf="!isConnected && !showConfigEditor">
