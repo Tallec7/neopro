@@ -140,7 +140,8 @@ run_installation() {
     echo ""
 
     # Exécuter install.sh avec les paramètres
-    ./install.sh "$CLUB_NAME" "$WIFI_PASSWORD"
+    # Répondre automatiquement "o" au prompt de confirmation
+    echo "o" | ./install.sh "$CLUB_NAME" "$WIFI_PASSWORD"
 
     print_success "Installation terminée"
 }
