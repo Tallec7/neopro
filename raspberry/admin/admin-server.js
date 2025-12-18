@@ -27,6 +27,13 @@ const execAsync = promisify(exec);
 // Email notifications
 const emailNotifier = require('./email-notifier');
 
+// Cache manager
+const { getInstance: getCacheManager, NAMESPACES } = require('./cache-manager');
+const cache = getCacheManager({
+  maxSize: 200,
+  defaultTTL: 60000 // 60 secondes
+});
+
 // Configuration
 const app = express();
 const PORT = process.env.ADMIN_PORT || 8080;
@@ -44,12 +51,6 @@ const CONFIG_FILE_CANDIDATES = [
   process.env.CONFIG_PATH,
   path.join(NEOPRO_DIR, 'webapp', 'configuration.json'),
 ].filter((value, index, self) => value && self.indexOf(value) === index);
-const VIDEO_MAPPING_CACHE_DURATION = 60 * 1000; // 1 minute cache pour limiter les lectures disque
-let videoMappingCache = null;
-let videoMappingCacheTime = 0;
-const VIDEO_METADATA_CACHE_DURATION = 60 * 1000;
-let videoMetadataCache = null;
-let videoMetadataCacheTime = 0;
 const CONFIG_JSON_INDENT = 4;
 
 console.log(`[admin] NEOPRO_DIR resolved to ${NEOPRO_DIR}`);
@@ -125,19 +126,21 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/videos', express.static(VIDEOS_DIR));
 
 async function resolveConfigurationPath() {
-  for (const candidate of CONFIG_FILE_CANDIDATES) {
-    try {
-      const stats = await fs.stat(candidate);
-      if (stats.isFile()) {
-        console.log('[admin] configuration.json detected at', candidate);
-        return candidate;
+  return cache.getOrSet(NAMESPACES.CONFIG, 'path', async () => {
+    for (const candidate of CONFIG_FILE_CANDIDATES) {
+      try {
+        const stats = await fs.stat(candidate);
+        if (stats.isFile()) {
+          console.log('[admin] configuration.json detected at', candidate);
+          return candidate;
+        }
+      } catch (error) {
+        // Ignorer et tester la suivante
       }
-    } catch (error) {
-      // Ignorer et tester la suivante
     }
-  }
-  console.warn('[admin] Aucun configuration.json trouvé parmi', CONFIG_FILE_CANDIDATES);
-  return null;
+    console.warn('[admin] Aucun configuration.json trouvé parmi', CONFIG_FILE_CANDIDATES);
+    return null;
+  }, 300000); // 5 minutes TTL
 }
 
 function sanitizeSegment(value, fallback) {
@@ -190,79 +193,74 @@ function extractPathSegments(videoPath) {
 }
 
 async function loadVideoPathMapping() {
-  if (videoMappingCache && Date.now() - videoMappingCacheTime < VIDEO_MAPPING_CACHE_DURATION) {
-    return videoMappingCache;
-  }
+  return cache.getOrSet(NAMESPACES.CONFIG, 'videoMapping', async () => {
+    const mapping = { categories: {}, subcategories: {} };
 
-  const mapping = { categories: {}, subcategories: {} };
+    try {
+      const configPath = await resolveConfigurationPath();
+      if (!configPath) {
+        console.warn('[admin] Impossible de localiser configuration.json pour déterminer les dossiers vidéo');
+      } else {
+        const configRaw = await fs.readFile(configPath, 'utf8');
+        const config = JSON.parse(configRaw);
+        const categories = config.categories || [];
 
-  try {
-    const configPath = await resolveConfigurationPath();
-    if (!configPath) {
-      console.warn('[admin] Impossible de localiser configuration.json pour déterminer les dossiers vidéo');
-    } else {
-      const configRaw = await fs.readFile(configPath, 'utf8');
-      const config = JSON.parse(configRaw);
-      const categories = config.categories || [];
+        for (const category of categories) {
+          if (!category || !category.id) continue;
+          const categoryKey = category.id.trim().toLowerCase();
+          let categoryDir = null;
 
-      for (const category of categories) {
-        if (!category || !category.id) continue;
-        const categoryKey = category.id.trim().toLowerCase();
-        let categoryDir = null;
-
-        const directVideos = category.videos || [];
-        for (const video of directVideos) {
-          const parsed = extractPathSegments(video.path);
-          if (parsed?.category) {
-            categoryDir = parsed.category;
-            break;
-          }
-        }
-
-        const subcategories = category.subCategories || [];
-        for (const sub of subcategories) {
-          if (!sub || !sub.id) continue;
-          const subKey = `${categoryKey}::${sub.id.trim().toLowerCase()}`;
-          let subDir = null;
-
-          const subVideos = sub.videos || [];
-          for (const video of subVideos) {
+          const directVideos = category.videos || [];
+          for (const video of directVideos) {
             const parsed = extractPathSegments(video.path);
-            if (parsed?.subcategory) {
-              subDir = parsed.subcategory;
-            }
-            if (parsed?.category && !categoryDir) {
+            if (parsed?.category) {
               categoryDir = parsed.category;
-            }
-            if (subDir && categoryDir) {
               break;
             }
           }
 
-          if (subDir) {
-            mapping.subcategories[subKey] = subDir;
+          const subcategories = category.subCategories || [];
+          for (const sub of subcategories) {
+            if (!sub || !sub.id) continue;
+            const subKey = `${categoryKey}::${sub.id.trim().toLowerCase()}`;
+            let subDir = null;
+
+            const subVideos = sub.videos || [];
+            for (const video of subVideos) {
+              const parsed = extractPathSegments(video.path);
+              if (parsed?.subcategory) {
+                subDir = parsed.subcategory;
+              }
+              if (parsed?.category && !categoryDir) {
+                categoryDir = parsed.category;
+              }
+              if (subDir && categoryDir) {
+                break;
+              }
+            }
+
+            if (subDir) {
+              mapping.subcategories[subKey] = subDir;
+            }
+          }
+
+          if (categoryDir) {
+            mapping.categories[categoryKey] = categoryDir;
           }
         }
-
-        if (categoryDir) {
-          mapping.categories[categoryKey] = categoryDir;
-        }
       }
+    } catch (error) {
+      console.warn('[admin] Erreur lors du chargement de configuration.json:', error.message);
     }
-  } catch (error) {
-    console.warn('[admin] Erreur lors du chargement de configuration.json:', error.message);
-  }
 
-  videoMappingCache = mapping;
-  videoMappingCacheTime = Date.now();
-  return mapping;
+    return mapping;
+  }, 60000); // 60 seconds TTL
 }
 
 function invalidateVideoCaches() {
-  videoMappingCache = null;
-  videoMappingCacheTime = 0;
-  videoMetadataCache = null;
-  videoMetadataCacheTime = 0;
+  cache.clearNamespace(NAMESPACES.CONFIG);
+  cache.clearNamespace(NAMESPACES.VIDEOS);
+  console.log('[admin] Video and config caches invalidated');
 }
 
 /**
@@ -359,74 +357,68 @@ function findInConfig(config, categoryId, subcategoryId = null, videoPath = null
 }
 
 async function getVideoMetadataFromConfig() {
-  if (videoMetadataCache && Date.now() - videoMetadataCacheTime < VIDEO_METADATA_CACHE_DURATION) {
-    return videoMetadataCache;
-  }
+  return cache.getOrSet(NAMESPACES.CONFIG, 'videoMetadata', async () => {
+    const metadata = {};
+    try {
+      const configPath = await resolveConfigurationPath();
+      if (!configPath) {
+        return metadata;
+      }
 
-  const metadata = {};
-  try {
-    const configPath = await resolveConfigurationPath();
-    if (!configPath) {
-      videoMetadataCache = metadata;
-      videoMetadataCacheTime = Date.now();
-      return metadata;
-    }
+      const configRaw = await fs.readFile(configPath, 'utf8');
+      const config = JSON.parse(configRaw);
 
-    const configRaw = await fs.readFile(configPath, 'utf8');
-    const config = JSON.parse(configRaw);
+      for (const category of config.categories || []) {
+        if (!category) continue;
+        const categoryId = (category.id || category.name || '').trim();
 
-    for (const category of config.categories || []) {
-      if (!category) continue;
-      const categoryId = (category.id || category.name || '').trim();
-
-      (category.videos || []).forEach(video => {
-        if (!video?.path) {
-          return;
-        }
-        metadata[video.path.replace(/\\/g, '/')] = {
-          displayName: video.name,
-          categoryId: categoryId,
-          subcategoryId: null
-        };
-      });
-
-      for (const sub of category.subCategories || []) {
-        if (!sub) {
-          continue;
-        }
-        const subId = (sub.id || sub.name || '').trim();
-        (sub.videos || []).forEach(video => {
+        (category.videos || []).forEach(video => {
           if (!video?.path) {
             return;
           }
           metadata[video.path.replace(/\\/g, '/')] = {
             displayName: video.name,
             categoryId: categoryId,
-            subcategoryId: subId || null
+            subcategoryId: null
           };
         });
+
+        for (const sub of category.subCategories || []) {
+          if (!sub) {
+            continue;
+          }
+          const subId = (sub.id || sub.name || '').trim();
+          (sub.videos || []).forEach(video => {
+            if (!video?.path) {
+              return;
+            }
+            metadata[video.path.replace(/\\/g, '/')] = {
+              displayName: video.name,
+              categoryId: categoryId,
+              subcategoryId: subId || null
+            };
+          });
+        }
       }
+
+      // Sponsors (boucle partenaires) - considérer leurs vidéos comme référencées
+      for (const sponsor of config.sponsors || []) {
+        if (!sponsor?.path) {
+          continue;
+        }
+        const normalizedPath = sponsor.path.replace(/\\/g, '/');
+        metadata[normalizedPath] = {
+          displayName: sponsor.name || buildDisplayNameFromFilename(path.basename(normalizedPath)),
+          categoryId: 'sponsor',
+          subcategoryId: null
+        };
+      }
+    } catch (error) {
+      console.warn('[admin] Unable to build configuration video metadata map:', error.message);
     }
 
-    // Sponsors (boucle partenaires) - considérer leurs vidéos comme référencées
-    for (const sponsor of config.sponsors || []) {
-      if (!sponsor?.path) {
-        continue;
-      }
-      const normalizedPath = sponsor.path.replace(/\\/g, '/');
-      metadata[normalizedPath] = {
-        displayName: sponsor.name || buildDisplayNameFromFilename(path.basename(normalizedPath)),
-        categoryId: 'sponsor',
-        subcategoryId: null
-      };
-    }
-  } catch (error) {
-    console.warn('[admin] Unable to build configuration video metadata map:', error.message);
-  }
-
-  videoMetadataCache = metadata;
-  videoMetadataCacheTime = Date.now();
-  return metadata;
+    return metadata;
+  }, 60000); // 60 seconds TTL
 }
 
 async function resolveUploadDirectories(categoryId, subcategoryId) {
@@ -2491,6 +2483,78 @@ app.post('/api/email/send', async (req, res) => {
         error: 'Échec de l\'envoi de l\'email'
       });
     }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =====================================================
+// Cache Management API
+// =====================================================
+
+/**
+ * GET /api/cache/stats
+ * Obtenir les statistiques du cache
+ */
+app.get('/api/cache/stats', (req, res) => {
+  try {
+    const stats = cache.getStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/cache/clear
+ * Vider tout le cache ou un namespace spécifique
+ * Query params: ?namespace=config (optionnel)
+ */
+app.delete('/api/cache/clear', (req, res) => {
+  try {
+    const namespace = req.query.namespace;
+
+    if (namespace) {
+      if (!Object.values(NAMESPACES).includes(namespace)) {
+        return res.status(400).json({
+          error: 'Namespace invalide',
+          validNamespaces: Object.values(NAMESPACES)
+        });
+      }
+      cache.clearNamespace(namespace);
+      res.json({
+        success: true,
+        message: `Cache du namespace '${namespace}' vidé avec succès`
+      });
+    } else {
+      cache.clear();
+      res.json({
+        success: true,
+        message: 'Tous les caches vidés avec succès'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/cache/info
+ * Obtenir des informations détaillées sur le cache
+ */
+app.get('/api/cache/info', (req, res) => {
+  try {
+    const stats = cache.getStats();
+    const info = {
+      stats,
+      namespaces: NAMESPACES,
+      maxSize: 200,
+      defaultTTL: 60000,
+      hitRate: stats.total > 0
+        ? ((stats.hits / stats.total) * 100).toFixed(2) + '%'
+        : '0%'
+    };
+    res.json(info);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
