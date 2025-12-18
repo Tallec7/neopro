@@ -31,7 +31,11 @@ const DEFAULT_NEOPRO_DIR = path.resolve(__dirname, '..');
 const NEOPRO_DIR = process.env.NEOPRO_DIR || DEFAULT_NEOPRO_DIR;
 const VIDEOS_DIR = path.join(NEOPRO_DIR, 'videos');
 const TEMP_UPLOAD_DIR = path.join(NEOPRO_DIR, 'uploads-temp');
+const PROCESSING_DIR = path.join(NEOPRO_DIR, 'videos-processing');
+const THUMBNAILS_DIR = path.join(NEOPRO_DIR, 'thumbnails');
 const LOGS_DIR = path.join(NEOPRO_DIR, 'logs');
+const VIDEO_COMPRESSION_ENABLED = process.env.VIDEO_COMPRESSION !== 'false';
+const VIDEO_THUMBNAILS_ENABLED = process.env.VIDEO_THUMBNAILS !== 'false';
 // Single source of truth: webapp/configuration.json
 const CONFIG_FILE_CANDIDATES = [
   process.env.CONFIG_PATH,
@@ -676,6 +680,69 @@ const uploadPackage = multer({
 });
 
 /**
+ * Gestion de la file de traitement vidéo
+ */
+
+async function addToProcessingQueue(jobData) {
+  try {
+    // Créer le dossier de traitement
+    await fs.mkdir(PROCESSING_DIR, { recursive: true });
+
+    // Générer un ID unique pour le job
+    const jobId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const job = {
+      id: jobId,
+      ...jobData,
+      createdAt: new Date().toISOString(),
+      status: 'pending'
+    };
+
+    // Lire la file actuelle
+    let queue = [];
+    const queueFile = path.join(PROCESSING_DIR, 'queue.json');
+    try {
+      const data = await fs.readFile(queueFile, 'utf8');
+      queue = JSON.parse(data).jobs || [];
+    } catch {
+      // File vide ou inexistante
+    }
+
+    // Ajouter le job
+    queue.push(job);
+
+    // Sauvegarder
+    await fs.writeFile(queueFile, JSON.stringify({ jobs: queue, updated: new Date().toISOString() }, null, 2));
+
+    console.log('[admin] Job ajouté à la file de traitement', { jobId, inputPath: jobData.inputPath });
+
+    return jobId;
+  } catch (error) {
+    console.error('[admin] Échec de l\'ajout à la file', error);
+    throw error;
+  }
+}
+
+async function getJobStatus(jobId) {
+  try {
+    const statusFile = path.join(PROCESSING_DIR, `job-${jobId}.json`);
+    const data = await fs.readFile(statusFile, 'utf8');
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+async function getProcessingQueue() {
+  try {
+    const queueFile = path.join(PROCESSING_DIR, 'queue.json');
+    const data = await fs.readFile(queueFile, 'utf8');
+    return JSON.parse(data).jobs || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Utilitaires
  */
 
@@ -926,6 +993,9 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
       return res.status(400).json({ error: 'Aucun fichier fourni' });
     }
 
+    const compress = req.body.compress !== 'false' && VIDEO_COMPRESSION_ENABLED;
+    const generateThumbnail = req.body.thumbnail !== 'false' && VIDEO_THUMBNAILS_ENABLED;
+
     const { category, subcategory } = await resolveUploadDirectories(
       req.body.category,
       req.body.subcategory
@@ -934,44 +1004,86 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
       ? path.join(VIDEOS_DIR, category, subcategory)
       : path.join(VIDEOS_DIR, category);
     await fs.mkdir(targetDir, { recursive: true });
+
     const targetPath = path.join(targetDir, req.file.filename);
-    await fs.rename(req.file.path, targetPath);
-    await updateConfigurationWithVideo(
-      req.body.category,
-      req.body.subcategory,
-      category,
-      subcategory,
-      req.file.filename,
-      req.file.mimetype,
-      req.body.displayName
-    );
 
-    console.log('[admin] Upload directory resolved', {
-      requestedCategory: req.body.category,
-      requestedSubcategory: req.body.subcategory,
-      resolvedCategory: category,
-      resolvedSubcategory: subcategory,
-      targetPath
-    });
+    // Si compression ou miniature demandée, ajouter à la file de traitement
+    if (compress || generateThumbnail) {
+      // Déplacer vers le dossier de traitement
+      const processingPath = path.join(PROCESSING_DIR, req.file.filename);
+      await fs.mkdir(PROCESSING_DIR, { recursive: true });
+      await fs.rename(req.file.path, processingPath);
 
-    console.log('[admin] POST /api/videos/upload', {
-      filename: req.file.filename,
-      tempPath: req.file.path,
-      finalPath: targetPath,
-      size: req.file.size,
-      category: req.body.category,
-      subcategory: req.body.subcategory
-    });
+      // Ajouter le job à la file
+      const jobId = await addToProcessingQueue({
+        inputPath: processingPath,
+        outputPath: targetPath,
+        category: category,
+        subcategory: subcategory,
+        compress: compress,
+        thumbnail: generateThumbnail,
+        displayName: req.body.displayName,
+        categoryId: req.body.category,
+        subcategoryId: req.body.subcategory,
+        mimetype: req.file.mimetype
+      });
 
-    res.json({
-      success: true,
-      message: 'Vidéo uploadée avec succès',
-      file: {
-        name: req.file.filename,
-        size: (req.file.size / 1024 / 1024).toFixed(2) + ' MB',
-        path: targetPath
-      }
-    });
+      console.log('[admin] POST /api/videos/upload - ajouté à la file de traitement', {
+        filename: req.file.filename,
+        jobId: jobId,
+        compress: compress,
+        thumbnail: generateThumbnail,
+        size: req.file.size,
+        category: req.body.category,
+        subcategory: req.body.subcategory
+      });
+
+      res.json({
+        success: true,
+        message: 'Vidéo uploadée avec succès - traitement en cours',
+        file: {
+          name: req.file.filename,
+          size: (req.file.size / 1024 / 1024).toFixed(2) + ' MB',
+          path: targetPath
+        },
+        processing: {
+          jobId: jobId,
+          compress: compress,
+          thumbnail: generateThumbnail,
+          status: 'pending'
+        }
+      });
+    } else {
+      // Pas de traitement, déplacer directement
+      await fs.rename(req.file.path, targetPath);
+      await updateConfigurationWithVideo(
+        req.body.category,
+        req.body.subcategory,
+        category,
+        subcategory,
+        req.file.filename,
+        req.file.mimetype,
+        req.body.displayName
+      );
+
+      console.log('[admin] POST /api/videos/upload - upload direct', {
+        filename: req.file.filename,
+        finalPath: targetPath,
+        size: req.file.size,
+        category: req.body.category,
+        subcategory: req.body.subcategory
+      });
+
+      res.json({
+        success: true,
+        message: 'Vidéo uploadée avec succès',
+        file: {
+          name: req.file.filename,
+          size: (req.file.size / 1024 / 1024).toFixed(2) + ' MB',
+          path: targetPath
+        }
+      });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2279,6 +2391,47 @@ app.post('/api/backups/auto-toggle', async (req, res) => {
     }
   } catch (error) {
     console.error('[admin] Error toggling auto-backup:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Statut d'un job de traitement vidéo
+app.get('/api/videos/processing/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const status = await getJobStatus(jobId);
+
+    if (!status) {
+      return res.status(404).json({ error: 'Job non trouvé' });
+    }
+
+    res.json(status);
+  } catch (error) {
+    console.error('[admin] Error getting job status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: File d'attente de traitement
+app.get('/api/videos/processing', async (req, res) => {
+  try {
+    const queue = await getProcessingQueue();
+    res.json({ queue, total: queue.length });
+  } catch (error) {
+    console.error('[admin] Error getting processing queue:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Configuration du traitement vidéo
+app.get('/api/videos/processing-config', async (req, res) => {
+  try {
+    res.json({
+      compressionEnabled: VIDEO_COMPRESSION_ENABLED,
+      thumbnailsEnabled: VIDEO_THUMBNAILS_ENABLED,
+      quality: process.env.VIDEO_QUALITY || 'medium'
+    });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
