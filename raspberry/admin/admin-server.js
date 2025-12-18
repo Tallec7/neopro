@@ -2054,6 +2054,235 @@ app.get('/api/network', async (req, res) => {
   }
 });
 
+// API: Liste des backups disponibles
+app.get('/api/backups', async (req, res) => {
+  try {
+    const backupDir = '/home/pi/neopro-backups';
+
+    // Vérifier si le dossier existe
+    try {
+      await fs.access(backupDir);
+    } catch {
+      return res.json({ backups: [], status: null });
+    }
+
+    // Lire les fichiers de backup
+    const files = await fs.readdir(backupDir);
+    const backupFiles = files.filter(f => f.match(/^backup-\d{8}-\d{6}\.tar\.gz$/));
+
+    const backups = await Promise.all(
+      backupFiles.map(async (filename) => {
+        const filePath = path.join(backupDir, filename);
+        const stats = await fs.stat(filePath);
+        const timestampMatch = filename.match(/backup-(\d{8})-(\d{6})\.tar\.gz/);
+
+        let date = null;
+        if (timestampMatch) {
+          const dateStr = timestampMatch[1];
+          const timeStr = timestampMatch[2];
+          date = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)} ${timeStr.slice(0, 2)}:${timeStr.slice(2, 4)}:${timeStr.slice(4, 6)}`;
+        }
+
+        return {
+          name: filename,
+          size: (stats.size / 1024 / 1024).toFixed(2) + ' MB',
+          sizeBytes: stats.size,
+          date: date,
+          created: stats.mtime,
+          age: Math.floor((Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24)) + ' jours'
+        };
+      })
+    );
+
+    // Trier par date (plus récent en premier)
+    backups.sort((a, b) => b.created.getTime() - a.created.getTime());
+
+    // Lire le statut du dernier backup
+    let lastBackupStatus = null;
+    try {
+      const statusFile = path.join(backupDir, 'last-backup-status.json');
+      const statusData = await fs.readFile(statusFile, 'utf8');
+      lastBackupStatus = JSON.parse(statusData);
+    } catch {
+      // Pas de statut disponible
+    }
+
+    res.json({
+      backups,
+      status: lastBackupStatus,
+      total: backups.length,
+      totalSize: backups.reduce((sum, b) => sum + b.sizeBytes, 0)
+    });
+  } catch (error) {
+    console.error('[admin] Error listing backups:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Créer un backup manuel
+app.post('/api/backups/create', async (req, res) => {
+  try {
+    const scriptPath = path.join(NEOPRO_DIR, 'scripts', 'auto-backup.sh');
+
+    // Vérifier que le script existe
+    try {
+      await fs.access(scriptPath);
+    } catch {
+      return res.status(500).json({ error: 'Script de backup non trouvé' });
+    }
+
+    // Exécuter le script de backup
+    const result = await execCommand(`sudo bash ${scriptPath}`);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Backup créé avec succès',
+        output: result.output
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Échec de la création du backup',
+        details: result.error
+      });
+    }
+  } catch (error) {
+    console.error('[admin] Error creating backup:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Télécharger un backup
+app.get('/api/backups/download/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params;
+
+    // Valider le nom du fichier (sécurité)
+    if (!filename.match(/^backup-\d{8}-\d{6}\.tar\.gz$/)) {
+      return res.status(400).json({ error: 'Nom de fichier invalide' });
+    }
+
+    const backupPath = path.join('/home/pi/neopro-backups', filename);
+
+    // Vérifier que le fichier existe
+    try {
+      await fs.access(backupPath);
+    } catch {
+      return res.status(404).json({ error: 'Backup non trouvé' });
+    }
+
+    res.download(backupPath, filename);
+  } catch (error) {
+    console.error('[admin] Error downloading backup:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Supprimer un backup
+app.delete('/api/backups/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params;
+
+    // Valider le nom du fichier (sécurité)
+    if (!filename.match(/^backup-\d{8}-\d{6}\.tar\.gz$/)) {
+      return res.status(400).json({ error: 'Nom de fichier invalide' });
+    }
+
+    const backupPath = path.join('/home/pi/neopro-backups', filename);
+
+    // Vérifier que le fichier existe
+    try {
+      await fs.access(backupPath);
+    } catch {
+      return res.status(404).json({ error: 'Backup non trouvé' });
+    }
+
+    // Supprimer le fichier
+    await fs.unlink(backupPath);
+
+    res.json({
+      success: true,
+      message: 'Backup supprimé'
+    });
+  } catch (error) {
+    console.error('[admin] Error deleting backup:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Statut du service de backup automatique
+app.get('/api/backups/auto-status', async (req, res) => {
+  try {
+    // Vérifier si le timer est actif
+    const timerResult = await execCommand('systemctl is-enabled neopro-backup.timer 2>/dev/null');
+    const isEnabled = timerResult.success && timerResult.output.trim() === 'enabled';
+
+    // Vérifier si le timer est en cours d'exécution
+    const activeResult = await execCommand('systemctl is-active neopro-backup.timer 2>/dev/null');
+    const isActive = activeResult.success && activeResult.output.trim() === 'active';
+
+    // Obtenir la prochaine exécution
+    let nextRun = null;
+    if (isActive) {
+      const nextRunResult = await execCommand('systemctl status neopro-backup.timer 2>/dev/null | grep "Trigger:"');
+      if (nextRunResult.success) {
+        const match = nextRunResult.output.match(/Trigger:\s*(.+)/);
+        if (match) {
+          nextRun = match[1].trim();
+        }
+      }
+    }
+
+    // Obtenir les logs récents
+    const logsResult = await execCommand('journalctl -u neopro-backup.service -n 20 --no-pager 2>/dev/null');
+    const logs = logsResult.success ? logsResult.output : null;
+
+    res.json({
+      enabled: isEnabled,
+      active: isActive,
+      nextRun: nextRun,
+      logs: logs
+    });
+  } catch (error) {
+    console.error('[admin] Error getting backup status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Activer/Désactiver le backup automatique
+app.post('/api/backups/auto-toggle', async (req, res) => {
+  try {
+    const { enable } = req.body;
+
+    if (enable === undefined) {
+      return res.status(400).json({ error: 'Paramètre "enable" requis' });
+    }
+
+    const command = enable
+      ? 'sudo systemctl enable --now neopro-backup.timer'
+      : 'sudo systemctl disable --now neopro-backup.timer';
+
+    const result = await execCommand(command);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: enable ? 'Backup automatique activé' : 'Backup automatique désactivé',
+        enabled: enable
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+  } catch (error) {
+    console.error('[admin] Error toggling auto-backup:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /**
  * Lancement du serveur
  */
