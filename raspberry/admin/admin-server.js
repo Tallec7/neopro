@@ -24,6 +24,9 @@ const os = require('os');
 
 const execAsync = promisify(exec);
 
+// Email notifications
+const emailNotifier = require('./email-notifier');
+
 // Configuration
 const app = express();
 const PORT = process.env.ADMIN_PORT || 8080;
@@ -2436,16 +2439,76 @@ app.get('/api/videos/processing-config', async (req, res) => {
   }
 });
 
+// API: Configuration des notifications email
+app.get('/api/email/config', async (req, res) => {
+  try {
+    const config = emailNotifier.getConfig();
+    res.json(config);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Envoyer un email de test
+app.post('/api/email/test', async (req, res) => {
+  try {
+    const success = await emailNotifier.sendTestEmail();
+    if (success) {
+      res.json({
+        success: true,
+        message: 'Email de test envoyé avec succès'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Échec de l\'envoi de l\'email de test'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Envoyer une notification personnalisée
+app.post('/api/email/send', async (req, res) => {
+  try {
+    const { subject, text, html, priority } = req.body;
+
+    if (!subject || !text) {
+      return res.status(400).json({ error: 'subject et text sont requis' });
+    }
+
+    const success = await emailNotifier.sendEmail({ subject, text, html, priority });
+
+    if (success) {
+      res.json({
+        success: true,
+        message: 'Email envoyé avec succès'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Échec de l\'envoi de l\'email'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /**
  * Lancement du serveur
  */
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`✓ Serveur Web Admin Neopro lancé sur le port ${PORT}`);
   console.log(`  Accessible sur:`);
   console.log(`  - http://neopro.local:${PORT}`);
   console.log(`  - http://192.168.4.1:${PORT}`);
   console.log(`  - http://localhost:${PORT}`);
+
+  // Initialiser les notifications email
+  await emailNotifier.init();
 });
 
 // Gestion des erreurs
