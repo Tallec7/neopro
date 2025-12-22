@@ -241,10 +241,11 @@ class SoftwareUpdateHandler {
       // - logs/: runtime logs
       // - backups/: backup archives
       // - webapp/configuration.json: club-specific configuration
+      // Note: 2>&1 | grep -v 'Ignoring unknown extended header' filters out macOS extended attribute warnings
       await execAsync(
         `tar -xzf ${packagePath} -C ${config.paths.root}/ ` +
         `--exclude='videos' --exclude='logs' --exclude='backups' ` +
-        `--exclude='webapp/configuration.json'`
+        `--exclude='webapp/configuration.json' 2>&1 | grep -v 'Ignoring unknown extended header' || true`
       );
 
       if (await fs.pathExists(path.join(config.paths.root, 'webapp/package.json'))) {
@@ -372,8 +373,9 @@ class SoftwareUpdateHandler {
 
     // 1. Vérifier l'espace disque (besoin 3x la taille du package)
     try {
-      const { stdout } = await execAsync("df -B1 /home/pi 2>/dev/null || df -B1 / | tail -1 | awk '{print $4}'");
-      const availableBytes = parseInt(stdout.trim().split('\n').pop()) || 0;
+      // Use a subshell to ensure tail and awk are applied to whichever df command succeeds
+      const { stdout } = await execAsync("(df -B1 /home/pi 2>/dev/null || df -B1 /) | tail -1 | awk '{print $4}'");
+      const availableBytes = parseInt(stdout.trim()) || 0;
       const requiredBytes = packageSize * 3;
 
       checks.diskSpace = {
