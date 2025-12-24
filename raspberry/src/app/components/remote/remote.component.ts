@@ -113,6 +113,23 @@ export class RemoteComponent implements OnInit {
       const data = this.route.snapshot.data['configuration'] as Configuration;
       this.initializeWithConfiguration(data);
     }
+
+    // Écouter le score initial envoyé par le serveur à la connexion
+    this.socketService.on('score-update', (scoreData: { homeTeam: string; awayTeam: string; homeScore: number; awayScore: number }) => {
+      console.log('[Remote] Score received from server:', scoreData);
+      this.currentScore = {
+        homeTeam: scoreData.homeTeam || this.currentScore.homeTeam,
+        awayTeam: scoreData.awayTeam || this.currentScore.awayTeam,
+        homeScore: scoreData.homeScore ?? this.currentScore.homeScore,
+        awayScore: scoreData.awayScore ?? this.currentScore.awayScore
+      };
+    });
+
+    // Écouter la phase initiale envoyée par le serveur
+    this.socketService.on('phase-change', (data: { phase: 'neutral' | 'before' | 'during' | 'after' }) => {
+      console.log('[Remote] Phase received from server:', data.phase);
+      this.activePhase = data.phase;
+    });
   }
 
   public onClubSelected(config: Configuration): void {
