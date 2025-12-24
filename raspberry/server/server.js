@@ -306,6 +306,13 @@ io.on('connection', (socket) => {
 		io.emit('phase-change', data);
 	});
 
+	// Permet à un client de redemander l'état actuel (utile après routing Angular)
+	socket.on('request-state', () => {
+		console.log('Request state reçu de:', socket.id);
+		socket.emit('score-update', currentScore);
+		socket.emit('phase-change', { phase: currentPhase });
+	});
+
 	socket.on('disconnect', () => {
 		console.log('Client déconnecté:', socket.id);
 	});

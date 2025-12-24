@@ -114,7 +114,7 @@ export class RemoteComponent implements OnInit {
       this.initializeWithConfiguration(data);
     }
 
-    // Écouter le score initial envoyé par le serveur à la connexion
+    // Écouter le score envoyé par le serveur
     this.socketService.on('score-update', (scoreData: { homeTeam: string; awayTeam: string; homeScore: number; awayScore: number }) => {
       console.log('[Remote] Score received from server:', scoreData);
       this.currentScore = {
@@ -125,11 +125,14 @@ export class RemoteComponent implements OnInit {
       };
     });
 
-    // Écouter la phase initiale envoyée par le serveur
+    // Écouter la phase envoyée par le serveur
     this.socketService.on('phase-change', (data: { phase: 'neutral' | 'before' | 'during' | 'after' }) => {
       console.log('[Remote] Phase received from server:', data.phase);
       this.activePhase = data.phase;
     });
+
+    // Demander l'état actuel au serveur (le message initial peut avoir été manqué pendant le routing)
+    this.socketService.emit('request-state', {});
   }
 
   public onClubSelected(config: Configuration): void {
