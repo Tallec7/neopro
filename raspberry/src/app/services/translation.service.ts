@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { TranslateService } from '@ngx-translate/core';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, firstValueFrom } from 'rxjs';
 
 export type SupportedLanguage = 'fr' | 'en' | 'es';
 
@@ -10,15 +11,26 @@ export interface LanguageOption {
   flag: string;
 }
 
+interface SettingsResponse {
+  settings: {
+    language: SupportedLanguage;
+    timezone: string;
+  };
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class TranslationService {
   private readonly translate = inject(TranslateService);
+  private readonly http = inject(HttpClient);
   private readonly STORAGE_KEY = 'neopro_language';
+  private readonly CONFIG_API_URL = 'http://localhost:8080/api/configuration/settings';
 
   private currentLangSubject = new BehaviorSubject<SupportedLanguage>('fr');
   currentLang$ = this.currentLangSubject.asObservable();
+
+  private configLanguage: SupportedLanguage = 'fr';
 
   readonly supportedLanguages: LanguageOption[] = [
     { code: 'fr', label: 'Français', flag: '🇫🇷' },
@@ -30,22 +42,46 @@ export class TranslationService {
     this.initializeLanguage();
   }
 
-  private initializeLanguage(): void {
+  private async initializeLanguage(): Promise<void> {
     this.translate.addLangs(['fr', 'en', 'es']);
     this.translate.setDefaultLang('fr');
 
-    const savedLang = this.getSavedLanguage();
-    const browserLang = this.translate.getBrowserLang() as SupportedLanguage;
-
+    // Priority: localStorage > config file > browser > default
     let langToUse: SupportedLanguage = 'fr';
 
+    // 1. Try localStorage first (user preference)
+    const savedLang = this.getSavedLanguage();
     if (savedLang && this.isValidLanguage(savedLang)) {
       langToUse = savedLang;
-    } else if (browserLang && this.isValidLanguage(browserLang)) {
-      langToUse = browserLang;
+    } else {
+      // 2. Try to load from config file
+      const configLang = await this.loadLanguageFromConfig();
+      if (configLang && this.isValidLanguage(configLang)) {
+        langToUse = configLang;
+        this.configLanguage = configLang;
+      } else {
+        // 3. Try browser language
+        const browserLang = this.translate.getBrowserLang() as SupportedLanguage;
+        if (browserLang && this.isValidLanguage(browserLang)) {
+          langToUse = browserLang;
+        }
+      }
     }
 
     this.setLanguage(langToUse, false);
+  }
+
+  private async loadLanguageFromConfig(): Promise<SupportedLanguage | null> {
+    try {
+      const response = await firstValueFrom(
+        this.http.get<SettingsResponse>(this.CONFIG_API_URL, { withCredentials: true })
+      );
+      return response?.settings?.language || null;
+    } catch {
+      // Config not available (e.g., admin server not running)
+      console.log('[i18n] Could not load language from config, using default');
+      return null;
+    }
   }
 
   private isValidLanguage(lang: string): lang is SupportedLanguage {
@@ -68,6 +104,11 @@ export class TranslationService {
     }
   }
 
+  /**
+   * Set the language for the UI
+   * @param lang The language code
+   * @param save Whether to save to localStorage (user preference override)
+   */
   setLanguage(lang: SupportedLanguage, save = true): void {
     this.translate.use(lang);
     this.currentLangSubject.next(lang);
@@ -77,6 +118,25 @@ export class TranslationService {
     }
 
     document.documentElement.lang = lang;
+  }
+
+  /**
+   * Reset to config language (remove user override)
+   */
+  resetToConfigLanguage(): void {
+    try {
+      localStorage.removeItem(this.STORAGE_KEY);
+    } catch {
+      // Ignore
+    }
+    this.setLanguage(this.configLanguage, false);
+  }
+
+  /**
+   * Get the language defined in the config file
+   */
+  getConfigLanguage(): SupportedLanguage {
+    return this.configLanguage;
   }
 
   getCurrentLanguage(): SupportedLanguage {
