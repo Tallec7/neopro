@@ -1,9 +1,25 @@
 # Analyse Stratégique Produit - NEOPRO
 
-> **Date** : 25 décembre 2025
+> **Date** : 26 décembre 2025
 > **Auteur** : Audit Product Strategy
-> **Version** : 1.0
+> **Version** : 1.1
 > **Statut** : Analyse complète basée sur le code source
+> **Alignement** : Business Plan v1.6 (26 décembre 2025)
+
+---
+
+## Changelog v1.1
+
+| Section | Modification |
+|---------|--------------|
+| Phase 0 | Ajout positionnement **Two-Sided Marketplace** |
+| Phase 1 | Nouvel usage actuel **E - Production Vidéo** |
+| Phase 2 | Enrichissement **U1 - Réseau Annonceurs** avec modèle économique |
+| Phase 2 | Détail **U3 - Fan Engagement** avec fonctionnalités BP |
+| Phase 3 | Ajout fonctionnalités **Production Vidéo** |
+| Phase 4 | Intégration **Seuils Critiques Réseau** (15/30/100/300 clubs) |
+| Phase 4 | Alignement **Pricing** Bronze/Silver/Gold (€50/€80/€120) |
+| Synthèse | Mise à jour recommandations avec modèle annonceurs |
 
 ---
 
@@ -31,6 +47,44 @@
 | **Raspberry Pi (Edge)** | Affichage TV + télécommande locale | Angular 20 + Node.js + Video.js |
 | **Central Server** | API backend + WebSocket temps réel | Express.js + PostgreSQL + Redis |
 | **Central Dashboard** | Console d'administration web | Angular 20 |
+
+### Positionnement stratégique : Two-Sided Marketplace
+
+> **Référence** : Business Plan v1.6, Section 1.2
+
+NEOPRO se positionne comme le **premier réseau publicitaire sportif amateur en France**, opérant une marketplace double-face :
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    TWO-SIDED MARKETPLACE                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   CÔTÉ 1 : CLUBS                    CÔTÉ 2 : ANNONCEURS            │
+│   ─────────────────                 ──────────────────              │
+│   • Abonnement plateforme           • Diffusion sur réseau         │
+│   • €50-120/mois                    • €250/mois                    │
+│   • Analytics + rapports            • Présence multi-clubs         │
+│   • Production vidéo (option)       • Analytics campagnes          │
+│                                                                     │
+│                    ┌─────────────────┐                              │
+│                    │     NEOPRO      │                              │
+│                    │  Garde 90%      │                              │
+│                    │  Reverse 10%    │                              │
+│                    └─────────────────┘                              │
+│                                                                     │
+│   EFFET RÉSEAU :                                                    │
+│   Plus clubs → Plus audience → CPM attractif → Plus annonceurs     │
+│                       ↓                                             │
+│   Revenus augmentent → Reverse clubs → Clubs payent moins          │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+| Segment | TAM France | Objectif 2026 | Objectif 2028 |
+|---------|------------|---------------|---------------|
+| **Clubs** | €5,2M (13,000 clubs × €400/an) | €53K (35 clubs) | €450K (300 clubs) |
+| **Annonceurs** | €1,2M (150 annonceurs × €8K/an) | €16K (6 annonceurs) | €80K (25 annonceurs) |
+| **TOTAL** | **€6,4M** | **€69K** | **€530K** |
 
 ### Capacités observées dans le code
 
@@ -157,6 +211,31 @@
 | **Fréquence observée** | Mensuelle/trimestrielle (hypothèse) |
 | **Profils utilisateurs** | Gestionnaire commercial |
 
+### Usage E : Production vidéo professionnelle
+
+> **Référence** : Business Plan v1.6, Section 2.7 - Différenciateur majeur
+
+| Aspect | Détail |
+|--------|--------|
+| **Description** | Produire des vidéos de célébration joueurs et contenus professionnels pour les clubs |
+| **Evidence** | BP v1.6 détaille les packs Bronze/Silver/Gold (€800-€2,000) |
+| **Fréquence observée** | Ponctuelle (début de saison, événements) |
+| **Profils utilisateurs** | Clubs (clients), Équipe NEOPRO (production) |
+
+**Offres Production Vidéo (BP v1.6)** :
+
+| Pack | Prix | Contenu | Marge |
+|------|------|---------|-------|
+| **Bronze** | €800 | 10 vidéos 30s (contenu club fourni), motion design basique | 56% |
+| **Silver** ⭐ | €1,500 | Shooting 1h30 + 10 vidéos 30s + 1 présentation, motion design pro | 32% |
+| **Gold** | €2,000 | Shooting 2h + 15 vidéos + interviews, révisions illimitées | 30% |
+
+**Valeur stratégique** :
+- Argument commercial massue : *"Vos joueurs comme des pros"*
+- Différenciateur vs concurrence (intégration automatique plateforme)
+- Source de revenus complémentaires (~€12,800 en 2026)
+- Prévision : 53% des clubs adoptent (16/30)
+
 ---
 
 ## 2. Usages latents identifiés
@@ -235,27 +314,68 @@
 
 # PHASE 2 — Nouveaux usages potentiels
 
-## Usage potentiel U1 : Régies publicitaires régionales
+## Usage potentiel U1 : Réseau publicitaire annonceurs (CÔTÉ 2 MARKETPLACE)
 
-> **Usage potentiel suggéré (extension de l'existant)**
+> **Usage stratégique validé par BP v1.6 - Section 2.5 & 2.6**
 
 | Aspect | Détail |
 |--------|--------|
-| **Ce qui le rend possible** | Groupes par géographie, analytics sponsors, déploiement multi-sites |
-| **Description** | Une régie locale gère les campagnes de plusieurs annonceurs sur un réseau de clubs d'une région |
-| **Valeur utilisateur** | Simplification pour sponsors multi-clubs, économies d'échelle |
-| **Valeur business** | Nouveau segment client (régies), revenus récurrents plus élevés |
-| **Risque si non adressé** | Concurrents captent le marché des réseaux régionaux |
+| **Ce qui le rend possible** | Groupes par géographie, analytics sponsors, déploiement multi-sites, infrastructure de tracking |
+| **Description** | NEOPRO opère le seul réseau publicitaire sportif amateur en France, permettant aux annonceurs régionaux/nationaux de diffuser sur tous les clubs partenaires |
+| **Valeur utilisateur** | 1 contrat = présence automatique sur 30+ salles, CPM attractif (€8-12 vs €15-25 digital) |
+| **Valeur business** | €250/mois × annonceurs, NEOPRO garde 90%, source de revenus récurrents majeure |
+| **Risque si non adressé** | Marché vierge capté par un concurrent |
+
+### Modèle économique annonceurs (BP v1.6)
+
+```
+ANNONCEUR paie €250/mois
+        ↓
+Vidéos diffusées sur tous clubs partenaires (max 3/club)
+        ↓
+NEOPRO garde 90% (€225/mois)
+        ↓
+CLUBS reçoivent 10% (€25/mois × 6 annonceurs = €1,800/an passifs)
+```
+
+### Cibles annonceurs prioritaires
+
+| Tier | Profil | Exemples | Budget | Objectif 2026 |
+|------|--------|----------|--------|---------------|
+| **1** | Régionaux | Decathlon Nantes, Crédit Mutuel Bretagne | €250-500/mois | 3-6 |
+| **2** | Nationaux | McDonald's, Nike, Orange | €500-2,000/mois | 0 (2027) |
+| **3** | Locaux | Restaurants, PME | €100-250/mois | Self-service 2027+ |
+
+### Seuils critiques réseau
+
+| Seuil | Clubs | Impact stratégique |
+|-------|-------|-------------------|
+| **15 clubs** | Lancement réseau annonceurs (reach minimal viable) |
+| **30 clubs** | Scale annonceurs régionaux (CPM compétitif) |
+| **100 clubs** | Attractivité annonceurs nationaux |
+| **300 clubs** | Pricing premium (quasi-monopole) |
+
+### Arguments vs publicité digitale
+
+| Critère | Digital Display | NEOPRO |
+|---------|-----------------|--------|
+| **CPM** | €15-25 | €8-12 |
+| **Attention** | Faible (ad-block) | Captive (salle) |
+| **Ciblage** | Imprécis (cookies) | Hyper-local garanti |
+| **Fraude** | Risque élevé (bots) | Zéro (spectateurs physiques) |
+| **Brand safety** | Variable | 100% sport amateur |
 
 **Fonctionnalités enablers existantes :**
 - Groupes géographiques
-- Sponsor analytics agrégées
+- Sponsor analytics agrégées (`sponsor_impressions`)
 - Déploiement par groupe
+- Rapports PDF automatiques
 
 **Gap à combler :**
-- Multi-tenancy sponsor
-- Dashboard régie avec vue multi-clubs
-- Facturation par impressions
+- Portail annonceur self-service
+- Dashboard consolidé multi-clubs
+- Facturation automatisée par impressions
+- Gestion droits annonceur (nouveau rôle)
 
 ---
 
@@ -279,7 +399,7 @@
 
 ## Usage potentiel U3 : Fan engagement interactif
 
-> **Usage potentiel suggéré (extension de l'existant)**
+> **Usage potentiel validé par BP v1.6 - Section 1.2 (Fonctionnalités Match)**
 
 | Aspect | Détail |
 |--------|--------|
@@ -289,10 +409,22 @@
 | **Valeur business** | Différenciation produit, données first-party, upsell |
 | **Risque si non adressé** | Produit perçu comme simple diffuseur passif |
 
+### Fonctionnalités prévues (BP v1.6)
+
+| Catégorie | Fonctionnalités |
+|-----------|-----------------|
+| **Engagement Spectateurs** | Jeux-concours QR code (vote meilleur joueur) |
+| | Sondages en direct mi-temps |
+| | Feed réseaux sociaux sur écran |
+| **Affichage Dynamique** | Annonces joueurs (vidéos célébrations 5-10s) |
+| | Affichage buteurs temps réel (1 clic smartphone) |
+| | Faits de jeu (cartons, temps-morts) |
+
 **Fonctionnalités enablers existantes :**
 - WebSocket bidirectionnel
 - Interface web mobile
 - Phases temporelles
+- QR code pour accès télécommande
 
 ---
 
@@ -358,7 +490,27 @@
 
 # PHASE 3 — Fonctionnalités nécessaires par usage
 
-## Pour U1 : Régies publicitaires régionales
+## Pour Usage E : Production Vidéo
+
+> **Référence** : BP v1.6 Section 2.7
+
+### Fonctionnalités existantes contributives
+- ✅ Upload vidéos vers plateforme (`content.controller.ts`)
+- ✅ Catégorisation des vidéos
+- ✅ Déploiement automatique vers sites
+
+### Fonctionnalités complémentaires suggérées (nouvel usage)
+
+| Fonctionnalité | Description | Effort |
+|----------------|-------------|--------|
+| **F.E.1 - Workflow production** | Suivi des commandes vidéo (brief → shooting → livraison) | Moyen |
+| **F.E.2 - Templates motion design** | Bibliothèque de templates réutilisables | Moyen |
+| **F.E.3 - Galerie assets club** | Stockage photos/vidéos sources par club | Faible |
+| **F.E.4 - Média Day multi-équipes** | Gestion des shootings groupés (prévu €2,500/journée) | Moyen |
+
+---
+
+## Pour U1 : Réseau publicitaire annonceurs
 
 ### Fonctionnalités existantes contributives
 - ✅ Groupes géographiques (`groups` avec type='geography')
@@ -370,10 +522,11 @@
 
 | Fonctionnalité | Description | Effort |
 |----------------|-------------|--------|
-| **F1.1 - Portail régie multi-sponsor** | Interface dédiée pour gérer plusieurs sponsors et leurs campagnes | Élevé |
-| **F1.2 - Dashboard consolidé multi-clubs** | Vue agrégée des performances sur tous les clubs d'un réseau | Moyen |
-| **F1.3 - Facturation par impressions** | Calcul automatique et facturation basée sur les impressions réelles | Élevé |
-| **F1.4 - Gestion droits régie** | Nouveau rôle "régie" avec accès limité à ses clubs/sponsors | Moyen |
+| **F1.1 - Portail annonceur self-service** | Interface dédiée pour annonceurs (upload créas, analytics, facturation) | Élevé |
+| **F1.2 - Dashboard consolidé multi-clubs** | Vue agrégée des performances sur tous les clubs du réseau | Moyen |
+| **F1.3 - Facturation automatisée** | Calcul et facturation basée sur les impressions réelles | Élevé |
+| **F1.4 - Rôle annonceur** | Nouveau rôle avec accès limité à ses campagnes uniquement | Moyen |
+| **F1.5 - Rotation intelligente** | Algorithme de distribution équitable des créas (max 3/club) | Moyen |
 
 ---
 
@@ -502,28 +655,51 @@
 
 # PHASE 4 — Roadmap fonctionnelle
 
+## Seuils critiques réseau (BP v1.6)
+
+> Les fonctionnalités sont conditionnées par le nombre de clubs actifs
+
+| Seuil | Clubs | Déclencheur stratégique |
+|-------|-------|-------------------------|
+| **S1** | 15 | Lancement réseau annonceurs (reach minimal) |
+| **S2** | 30 | Scale annonceurs régionaux, premiers revenus passifs clubs |
+| **S3** | 100 | Attractivité annonceurs nationaux |
+| **S4** | 300 | Pricing premium, quasi-monopole marché |
+
+## Pricing clubs (BP v1.6)
+
+| Offre | Prix/mois | Inclus |
+|-------|-----------|--------|
+| **Bronze** | €50 | Plateforme + support |
+| **Silver** | €80 | Bronze + analytics avancés |
+| **Gold** | €120 | Silver + analytics sponsors + priorité support |
+
 ## Vue d'ensemble
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           ROADMAP NEOPRO 2026                                │
+│                    Alignée BP v1.6 + Seuils Réseau                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ COURT TERME (0-3 mois)          │ MOYEN TERME (3-6 mois)                    │
+│ Objectif: 15 clubs (S1)         │ Objectif: 30 clubs (S2)                   │
 │ ─────────────────────────       │ ──────────────────────                    │
 │ • Overlay score TV (P0)         │ • Scheduler playlists (P1)               │
 │ • Notifications email (P0)      │ • Benchmarking anonymisé (P1)            │
 │ • Rapports auto email (P0)      │ • Objectifs & alertes (P1)               │
 │ • Objectifs simples (P1)        │ • Intégration score FFHB (P1)            │
-│ • Templates programmation (P1)  │ • Mode spectateur (P2)                   │
+│ • Templates programmation (P1)  │ • Mode spectateur MVP (P2)               │
+│ • [S1] Lancement annonceurs     │ • [S2] Scale annonceurs régionaux        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ LONG TERME (6-12 mois)                                                       │
+│ Objectif: 100 clubs (S3)                                                     │
 │ ─────────────────────────────────────────────────────────────                │
-│ • Portail sponsor self-service (P2)                                          │
+│ • Portail annonceur self-service (P2)                                        │
 │ • API OAuth partenaires (P2)                                                 │
 │ • A/B testing créas (P2)                                                     │
 │ • Multi-écrans / zones (P2)                                                  │
 │ • Intégration billetterie (P3)                                               │
-│ • Dashboard régie régionale (P3)                                             │
+│ • [S3] Annonceurs nationaux                                                  │
 │ • Préparation DOOH (P3)                                                      │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -604,7 +780,7 @@ IMPACT   ├──────────┼───────────�
 
 ## 1. Synthèse des usages actuels
 
-NEOPRO est aujourd'hui une **plateforme de gestion d'écrans TV pour clubs sportifs** qui permet :
+NEOPRO est une **two-sided marketplace** positionnée comme le **premier réseau publicitaire sportif amateur en France** :
 
 | Usage | Maturité | Couverture |
 |-------|----------|------------|
@@ -613,12 +789,15 @@ NEOPRO est aujourd'hui une **plateforme de gestion d'écrans TV pour clubs sport
 | Monitoring parc d'écrans | ⭐⭐⭐⭐ | Complète |
 | Reporting sponsors | ⭐⭐⭐ | PDF manuels |
 | Déploiement contenu | ⭐⭐⭐⭐ | Complète + canary |
+| **Production vidéo** | ⭐⭐⭐ | Service proposé (BP v1.6) |
 
 **Points forts observés :**
 - Architecture distribuée mature (Raspberry Pi + Cloud)
 - Stack technique moderne (Angular 20, Node.js, PostgreSQL)
 - Analytics sponsor différenciantes
 - Déploiement progressif (canary) rare dans ce marché
+- **Production vidéo intégrée** : différenciateur majeur (BP v1.6)
+- **Modèle two-sided** : clubs + annonceurs = 2 sources revenus
 
 ---
 
@@ -640,13 +819,23 @@ NEOPRO est aujourd'hui une **plateforme de gestion d'écrans TV pour clubs sport
 
 | Usage potentiel | Opportunité | Faisabilité | Recommandation |
 |-----------------|-------------|-------------|----------------|
-| U1 - Régies régionales | Haute | Moyenne | **Explorer T2 2026** |
-| U2 - DOOH programmatique | Très haute | Faible (volume) | Long terme |
-| U3 - Fan engagement | Moyenne | Haute | **Prototype H2 2026** |
+| **U1 - Réseau annonceurs** | **Très haute** | Haute | **PRIORITAIRE - Seuil S1 (15 clubs)** |
+| U2 - DOOH programmatique | Très haute | Faible (volume S3+) | Long terme (100+ clubs) |
+| U3 - Fan engagement | Haute | Haute | **Prototype H2 2026** |
 | U4 - Multi-écrans | Haute | Haute | **Développer 2026** |
 | U5 - Services fédérations | Haute | Moyenne | Opportuniste |
 | U6 - Formation/sensibilisation | Moyenne | Haute | Quick win contenu |
 | U7 - White-label | Haute | Moyenne | Stratégique 2027 |
+
+### Focus stratégique : Réseau Annonceurs (U1)
+
+> **TAM Annonceurs** : €1,2M ARR (BP v1.6)
+
+| Phase | Seuil | Action | Revenus attendus |
+|-------|-------|--------|------------------|
+| **2026 T2** | 15 clubs | Lancement réseau, 3-6 annonceurs régionaux | €16K ARR |
+| **2027** | 30 clubs | Scale, +10 annonceurs | €40K ARR |
+| **2028** | 100 clubs | Annonceurs nationaux | €80K ARR |
 
 ---
 
@@ -657,15 +846,17 @@ NEOPRO est aujourd'hui une **plateforme de gestion d'écrans TV pour clubs sport
 2. **Activer notifications email** - Quick win, réduction churn significative
 3. **Automatiser envoi PDF mensuels** - Valorise le travail analytics existant
 
-### Priorité 1 (court terme - 1-3 mois)
+### Priorité 1 (court terme - 1-3 mois) → Objectif S1 (15 clubs)
 4. **Implémenter objectifs simples** - Engagement proactif des clubs
 5. **Créer scheduler playlists** - Débloquer l'usage latent programmation
 6. **Lancer benchmarking anonymisé** - Différenciation + rétention
+7. **[S1] Préparer lancement réseau annonceurs** - Prospection Tier 1
 
-### Priorité 2 (moyen terme - 3-6 mois)
-7. **Intégrer API score FFHB** - Automatisation = montée en gamme premium
-8. **Développer portail sponsor MVP** - Nouveau segment client
-9. **Préparer multi-écrans** - Expansion du panier moyen
+### Priorité 2 (moyen terme - 3-6 mois) → Objectif S2 (30 clubs)
+8. **Intégrer API score FFHB** - Automatisation = montée en gamme premium
+9. **[S2] Onboarder 3-6 annonceurs régionaux** - Premiers revenus passifs clubs
+10. **Développer portail annonceur MVP** - Self-service simplifié
+11. **Préparer multi-écrans** - Expansion du panier moyen
 
 ---
 
@@ -683,20 +874,41 @@ NEOPRO est aujourd'hui une **plateforme de gestion d'écrans TV pour clubs sport
 
 ## 6. Conclusion
 
-NEOPRO dispose d'une **base technique solide** et d'une **proposition de valeur claire** pour les clubs sportifs. L'analyse révèle :
+NEOPRO dispose d'une **base technique solide** et d'un **positionnement stratégique différenciant** comme **premier réseau publicitaire sportif amateur en France**.
 
-1. **7 usages latents** partiellement couverts représentant un potentiel de déblocage rapide
-2. **7 nouveaux usages potentiels** justifiés par l'existant
-3. **17 items de roadmap** structurés sur 12 mois
+### Constats clés
 
-**Le focus recommandé pour les 3 prochains mois** :
-- Compléter les features premium promises (score)
-- Activer les mécanismes de rétention (alertes, objectifs, benchmarks)
-- Préparer l'expansion (multi-écrans, régies)
+| Dimension | Analyse |
+|-----------|---------|
+| **Modèle économique** | Two-sided marketplace validé (clubs + annonceurs) |
+| **TAM combiné** | €6,4M (€5,2M clubs + €1,2M annonceurs) |
+| **Différenciateur** | Production vidéo intégrée + analytics sponsors |
+| **Usages latents** | 7 identifiés, forte valeur de déblocage |
+| **Nouveaux usages** | 7 proposés, alignés BP v1.6 |
 
-La plateforme est **bien positionnée** pour évoluer d'un outil de diffusion vers une **plateforme d'engagement sportif complète**.
+### Focus stratégique 2026
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    OBJECTIFS CLÉS 2026                           │
+├─────────────────────────────────────────────────────────────────┤
+│  T1-T2: Atteindre S1 (15 clubs) → Lancer réseau annonceurs      │
+│  T3-T4: Atteindre S2 (30 clubs) → Scale annonceurs régionaux    │
+│  ARR cible: €69K (€53K clubs + €16K annonceurs)                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Recommandations finales
+
+1. **Compléter features premium** : overlay score, notifications, rapports auto
+2. **Atteindre seuil S1** : 15 clubs = déclencheur réseau annonceurs
+3. **Activer côté 2 marketplace** : prospection annonceurs Tier 1 dès S1
+4. **Capitaliser sur production vidéo** : différenciateur commercial massue
+5. **Préparer scale** : multi-écrans, portail annonceur, API partenaires
+
+La plateforme est **bien positionnée** pour évoluer d'un outil de diffusion vers une **marketplace d'engagement sportif complète** avec deux sources de revenus récurrents.
 
 ---
 
-*Document généré le 25 décembre 2025*
-*Basé sur l'analyse du code source du dépôt neopro*
+*Document mis à jour le 26 décembre 2025*
+*Basé sur l'analyse du code source et aligné avec Business Plan v1.6*
