@@ -2,9 +2,33 @@
 
 > **Date** : 26 décembre 2025
 > **Auteur** : Audit Product Strategy
-> **Version** : 1.2
+> **Version** : 1.3
 > **Statut** : Analyse complète basée sur le code source
-> **Alignement** : Business Plan v1.6 + Implémentations Dec 25-26
+> **Alignement** : Business Plan v1.6 + Implémentations Dec 25-26 + Nouveaux Usages
+
+---
+
+## Changelog v1.3
+
+> **MAJEUR** : Identification de 6 nouveaux usages potentiels justifiés par l'infrastructure existante
+
+| Section | Modification |
+|---------|--------------|
+| Phase 2 | Ajout **U8-U13** : 6 nouveaux usages avec evidence code |
+| Phase 3 | Ajout **30+ fonctionnalités complémentaires** marquées (nouvel usage) |
+| Phase 3 | Chaque usage avec **justification par l'existant** et **standards de marché** |
+| Phase 3 | Distinction explicite **hypothèses** vs **données vérifiables** |
+
+### Nouveaux usages identifiés (v1.3)
+
+| Usage | Enabler existant | Standard marché |
+|-------|------------------|-----------------|
+| **U8 - Intelligence Campagnes** | `sponsor_impressions` granulaires | Google Ads, Facebook Ads |
+| **U9 - Engagement Spectateurs** | WebSocket + Redis scaling | Twitch Polls, Slido |
+| **U10 - Contenu Contextuel** | `event_type`, `period` metadata | DOOH programmatique |
+| **U11 - Business Intelligence** | `club_daily_stats` complet | Google Analytics, Tableau |
+| **U12 - Automatisation Marketing** | `scheduler.service.ts` + `email.service.ts` | HubSpot, Mailchimp |
+| **U13 - Intégrations Partenaires** | Webhook Slack, API REST | Zapier, Make |
 
 ---
 
@@ -552,6 +576,167 @@ CLUBS reçoivent 10% (€25/mois × 6 annonceurs = €1,800/an passifs)
 
 ---
 
+## Usage potentiel U8 : Intelligence Campagnes Publicitaires
+
+> **Usage potentiel suggéré (extension de l'existant) - v1.2**
+
+| Aspect | Détail |
+|--------|--------|
+| **Ce qui le rend possible** | Infrastructure analytics granulaire existante |
+| **Evidence code** | `sponsor_impressions` avec `completion_rate`, `event_type`, `period`, `position_in_loop` ; `sponsor_daily_stats` agrégé |
+| **Standard de marché** | Google Ads, Facebook Ads Manager, LinkedIn Campaign Manager proposent des insights d'optimisation automatiques |
+| **Description** | Transformer les données brutes d'impressions en insights actionnables pour optimiser les campagnes |
+| **Valeur utilisateur** | Annonceurs optimisent leurs créas sans expertise analytics |
+| **Valeur business** | Rétention annonceurs, justification premium pricing |
+
+**Justification par l'existant :**
+```typescript
+// sponsor_impressions - Données disponibles dans la base
+{
+  completion_rate: number,      // ✅ Permet de scorer les vidéos
+  event_type: 'match' | 'training' | 'tournament',  // ✅ Corrélation performance/contexte
+  period: 'pre_match' | 'halftime' | 'post_match',  // ✅ Optimal timing
+  position_in_loop: number,     // ✅ Fatigue publicitaire
+  audience_estimate: number     // ✅ CPM réel calculable
+}
+```
+
+---
+
+## Usage potentiel U9 : Engagement Spectateurs Temps Réel (extension U3)
+
+> **Usage potentiel suggéré (extension de l'existant) - v1.2**
+
+| Aspect | Détail |
+|--------|--------|
+| **Ce qui le rend possible** | WebSocket bidirectionnel production-ready |
+| **Evidence code** | `socket.service.ts` (1,065 lignes) avec Redis adapter, `score-update.handler.ts`, commandes typées avec timeouts |
+| **Standard de marché** | Twitch Polls, YouTube Super Chat, Slido, Kahoot |
+| **Description** | Permettre aux spectateurs d'interagir en temps réel (votes, quiz, réactions) via QR code |
+| **Valeur utilisateur** | Expérience match gamifiée, engagement communauté |
+| **Valeur business** | Données first-party, différenciation, upsell premium |
+
+**Justification par l'existant :**
+```typescript
+// socket.service.ts - Infrastructure disponible
+- Socket.IO avec Redis adapter (scaling horizontal) ✅
+- Authentification API key avec bcrypt ✅
+- Broadcast vers sites/groupes avec tracking succès/échec ✅
+- score-update handler avec acknowledgment ✅
+- Zombie detection (ping/pong 25s) ✅
+```
+
+**Hypothèse :** L'accès spectateur via QR code nécessiterait un mode "public" non authentifié, non présent actuellement.
+
+---
+
+## Usage potentiel U10 : Contenu Contextuel Dynamique
+
+> **Usage potentiel suggéré (extension de l'existant) - v1.2**
+
+| Aspect | Détail |
+|--------|--------|
+| **Ce qui le rend possible** | Métadonnées contextuelles déjà trackées |
+| **Evidence code** | `event_type`, `period` dans impressions ; phases temporelles (before/during/after) dans télécommande |
+| **Standard de marché** | DOOH programmatique (Broadsign, Vistar), signalétique contextuelle |
+| **Description** | Adapter automatiquement le contenu diffusé selon le contexte (match, météo, audience) |
+| **Valeur utilisateur** | Pertinence accrue, moins de travail manuel |
+| **Valeur business** | Premium contextuel, différenciation technique |
+
+**Justification par l'existant :**
+```typescript
+// Données contextuelles disponibles
+event_type: 'match' | 'training' | 'tournament' | 'other'  // ✅
+period: 'pre_match' | 'halftime' | 'post_match' | 'loop'   // ✅
+audience_estimate: number                                    // ✅
+timeCategories: 'before' | 'during' | 'after'               // ✅ (télécommande)
+```
+
+**Information non disponible dans le dépôt :** Intégration API météo, détection automatique de phase.
+
+---
+
+## Usage potentiel U11 : Business Intelligence & Tableaux de Bord Interactifs
+
+> **Usage potentiel suggéré (extension de l'existant) - v1.2**
+
+| Aspect | Détail |
+|--------|--------|
+| **Ce qui le rend possible** | Modèle de données analytics complet |
+| **Evidence code** | `club_daily_stats` (12+ métriques agrégées), `sponsor_daily_stats`, API dashboard existante |
+| **Standard de marché** | Google Analytics 4, Tableau, Power BI, Mixpanel |
+| **Description** | Dashboards interactifs avec drill-down, trends, anomalies vs PDF statiques |
+| **Valeur utilisateur** | Self-service analytics, insights temps réel |
+| **Valeur business** | Réduction support, justification premium |
+
+**Justification par l'existant :**
+```sql
+-- club_daily_stats - Données disponibles
+sessions_count, screen_time_seconds, videos_played,
+manual_triggers, auto_plays,
+sponsor_plays, jingle_plays, ambiance_plays,
+avg_cpu, avg_memory, avg_temperature, max_temperature,
+uptime_percent, incidents_count
+-- Toutes agrégées par site/date ✅
+```
+
+---
+
+## Usage potentiel U12 : Automatisation Marketing & Lifecycle
+
+> **Usage potentiel suggéré (extension de l'existant) - v1.2**
+
+| Aspect | Détail |
+|--------|--------|
+| **Ce qui le rend possible** | Scheduler database-driven, email service avec templates |
+| **Evidence code** | `scheduler.service.ts` (254 lignes), `email.service.ts` (348 lignes) avec templates HTML |
+| **Standard de marché** | HubSpot, Mailchimp, Intercom, Customer.io |
+| **Description** | Séquences emails automatisées (onboarding, inactivité, rapports périodiques) |
+| **Valeur utilisateur** | Communication proactive sans effort |
+| **Valeur business** | Réduction churn, engagement automatisé |
+
+**Justification par l'existant :**
+```typescript
+// email.service.ts - Templates disponibles
+sendAlertNotification()      // ✅ Template alert prêt
+sendDeploymentNotification() // ✅ Template deployment prêt
+sendSummaryReport()          // ✅ Template rapport prêt
+
+// scheduler.service.ts - Infrastructure disponible
+- Check toutes les 60 secondes ✅
+- Database-driven (facile à étendre) ✅
+- Support scheduled_at future ✅
+```
+
+**Gap identifié :** Pas de recurring scheduling (cron-like), seulement one-shot.
+
+---
+
+## Usage potentiel U13 : Intégrations Écosystème Partenaires
+
+> **Usage potentiel suggéré (extension de l'existant) - v1.2**
+
+| Aspect | Détail |
+|--------|--------|
+| **Ce qui le rend possible** | Architecture API REST, multi-tenant |
+| **Evidence code** | API documentée OpenAPI, rôles étendus (sponsor, agency), webhooks Slack dans `alert.service.ts` |
+| **Standard de marché** | Zapier, Make, API publiques partenaires |
+| **Description** | Webhooks sortants et API OAuth pour intégrations tierces (billetterie, CRM, réseaux sociaux) |
+| **Valeur utilisateur** | Données dans leurs outils existants |
+| **Valeur business** | Écosystème, stickiness, partenariats |
+
+**Justification par l'existant :**
+```typescript
+// alert.service.ts - Webhook Slack existant
+siteOffline()       // Envoie vers Slack ✅
+highTemperature()   // Envoie vers Slack ✅
+lowDiskSpace()      // Envoie vers Slack ✅
+```
+
+**Information non disponible dans le dépôt :** Intégrations billetterie (Weezevent), fédérations (FFHB), réseaux sociaux.
+
+---
+
 # PHASE 3 — Fonctionnalités nécessaires par usage
 
 ## Pour Usage E : Production Vidéo
@@ -786,6 +971,149 @@ sendSummaryReport(to, { period, totalSites, alertsCount, ... })        // ✅ FA
 | **F.L5.2 - Percentiles** | Positionnement (top 10%, médiane, etc.) | Faible |
 | **F.L5.3 - Insights automatiques** | Recommandations basées sur les écarts | Moyen |
 | **F.L5.4 - Cohort filtering** | Segmentation par sport, taille, région | Faible |
+
+---
+
+## Pour U8 : Intelligence Campagnes Publicitaires
+
+> **v1.2** : Nouvel usage identifié basé sur infrastructure analytics existante
+
+### Fonctionnalités existantes contributives
+- ✅ `sponsor_impressions` avec `completion_rate`, `event_type`, `period`
+- ✅ `sponsor_daily_stats` agrégé par vidéo/site/jour
+- ✅ Calcul `position_in_loop` (fatigue publicitaire)
+- ✅ `audience_estimate` pour CPM réel
+
+### Fonctionnalités complémentaires suggérées (nouvel usage)
+
+| Fonctionnalité | Description | Effort | Priorité |
+|----------------|-------------|--------|----------|
+| **F.U8.1 - Scoring créas** | Score automatique par vidéo (completion_rate × impressions × reach) | Faible | **P1** |
+| **F.U8.2 - Alertes performance** | Notification si completion_rate < seuil ou zéro impressions 7j | Faible | **P1** |
+| **F.U8.3 - Optimal timing** | Recommandation meilleur `period` basée sur historique | Moyen | P2 |
+| **F.U8.4 - Fatigue detection** | Alerte si `position_in_loop` élevé dégrade completion_rate | Moyen | P2 |
+| **F.U8.5 - CPM calculator** | CPM réel = coût / (impressions × audience_estimate) | Faible | **P1** |
+
+**Justification** : Données 100% disponibles dans `sponsor_impressions`, calculs simples.
+
+---
+
+## Pour U9 : Engagement Spectateurs Temps Réel
+
+> **v1.2** : Extension de U3 (Fan Engagement) avec fonctionnalités détaillées
+
+### Fonctionnalités existantes contributives
+- ✅ WebSocket bidirectionnel (`socket.service.ts`)
+- ✅ Redis adapter pour scaling
+- ✅ Broadcast vers sites avec acknowledgment
+- ✅ `score-update.handler.ts` comme modèle
+
+### Fonctionnalités complémentaires suggérées (nouvel usage)
+
+| Fonctionnalité | Description | Effort | Priorité |
+|----------------|-------------|--------|----------|
+| **F.U9.1 - Mode spectateur** | Accès public via QR code (authentification optionnelle) | Moyen | **P1** |
+| **F.U9.2 - Système votes** | Créer/gérer/voter sur questions temps réel | Moyen | P2 |
+| **F.U9.3 - Affichage TV** | Overlay résultats votes sur écran (WebSocket push) | Moyen | P2 |
+| **F.U9.4 - Quiz gamifié** | Questions avec timer, leaderboard, récompenses | Élevé | P3 |
+| **F.U9.5 - Modération** | Filtrage contenu avant affichage (mots interdits, validation) | Moyen | P2 |
+
+**Hypothèse** : Nécessite nouveau handler WebSocket pour votes, nouveau modèle de données `polls`.
+
+---
+
+## Pour U10 : Contenu Contextuel Dynamique
+
+> **v1.2** : Automatisation basée sur les métadonnées contextuelles existantes
+
+### Fonctionnalités existantes contributives
+- ✅ `event_type` : match, training, tournament, other
+- ✅ `period` : pre_match, halftime, post_match, loop
+- ✅ Phases télécommande : before, during, after
+- ✅ Catégories vidéos : sponsor, jingle, ambiance
+
+### Fonctionnalités complémentaires suggérées (nouvel usage)
+
+| Fonctionnalité | Description | Effort | Priorité |
+|----------------|-------------|--------|----------|
+| **F.U10.1 - Règles contextuelles** | IF event_type=match AND period=halftime THEN playlist_sponsors | Moyen | P2 |
+| **F.U10.2 - Auto-phase detection** | Inférer phase depuis activité score (score change → during) | Moyen | P2 |
+| **F.U10.3 - Contenu météo** | Intégration API météo → adapter ambiance (pluie, soleil) | Faible | P3 |
+| **F.U10.4 - Audience-adaptive** | Si audience_estimate > seuil → augmenter fréquence sponsors | Moyen | P2 |
+| **F.U10.5 - Priority slots** | Sponsors premium toujours en position 1-2 du loop | Faible | **P1** |
+
+**Information non disponible** : API météo externe non intégrée.
+
+---
+
+## Pour U11 : Business Intelligence & Dashboards Interactifs
+
+> **v1.2** : Évolution des PDF statiques vers dashboards self-service
+
+### Fonctionnalités existantes contributives
+- ✅ `club_daily_stats` : 12+ métriques agrégées
+- ✅ `sponsor_daily_stats` : tendances par vidéo/site
+- ✅ API `/analytics/clubs/:id/dashboard`
+- ✅ Export CSV existant
+
+### Fonctionnalités complémentaires suggérées (nouvel usage)
+
+| Fonctionnalité | Description | Effort | Priorité |
+|----------------|-------------|--------|----------|
+| **F.U11.1 - Dashboard temps réel** | Widgets live (vs refresh manuel) via WebSocket | Moyen | P2 |
+| **F.U11.2 - Drill-down** | Clic sur graphe → détail par site/vidéo/jour | Moyen | P2 |
+| **F.U11.3 - Trends YoY/MoM** | Comparaison automatique période précédente | Faible | **P1** |
+| **F.U11.4 - Anomaly alerts** | Détection écarts significatifs (screen_time -50%) | Moyen | P2 |
+| **F.U11.5 - Custom reports** | Builder de rapports personnalisés (drag & drop) | Élevé | P3 |
+
+**Justification** : Données 100% disponibles, nécessite frontend enrichi.
+
+---
+
+## Pour U12 : Automatisation Marketing & Lifecycle
+
+> **v1.2** : Extension du scheduler existant vers workflows marketing
+
+### Fonctionnalités existantes contributives
+- ✅ `scheduler.service.ts` : check toutes les 60s, database-driven
+- ✅ `email.service.ts` : templates HTML prêts
+- ✅ `sendSummaryReport()` : template rapport périodique
+
+### Fonctionnalités complémentaires suggérées (nouvel usage)
+
+| Fonctionnalité | Description | Effort | Priorité |
+|----------------|-------------|--------|----------|
+| **F.U12.1 - Cron scheduling** | Support récurrence (daily, weekly, monthly) | Moyen | **P1** |
+| **F.U12.2 - Séquence onboarding** | Emails J+1, J+7, J+30 après inscription club | Moyen | P2 |
+| **F.U12.3 - Alerte inactivité** | Email si screen_time=0 depuis X jours | Faible | **P1** |
+| **F.U12.4 - Rapport périodique auto** | Envoi hebdo/mensuel du PDF rapport | Faible | **P1** |
+| **F.U12.5 - Triggers événementiels** | Email automatique sur : nouveau sponsor, déploiement, alerte | Moyen | P2 |
+
+**Gap identifié** : `scheduler.service.ts` ne supporte pas les tâches récurrentes, seulement one-shot.
+
+---
+
+## Pour U13 : Intégrations Écosystème Partenaires
+
+> **v1.2** : Ouverture de la plateforme vers l'écosystème externe
+
+### Fonctionnalités existantes contributives
+- ✅ Webhook Slack dans `alert.service.ts`
+- ✅ API REST documentée (OpenAPI)
+- ✅ Authentification JWT/API key
+- ✅ Multi-tenant isolation
+
+### Fonctionnalités complémentaires suggérées (nouvel usage)
+
+| Fonctionnalité | Description | Effort | Priorité |
+|----------------|-------------|--------|----------|
+| **F.U13.1 - Webhooks génériques** | POST vers URL configurée sur événements (alert, deploy, session) | Moyen | P2 |
+| **F.U13.2 - API OAuth 2.0** | Authentification partenaires avec scopes | Élevé | P2 |
+| **F.U13.3 - Intégration Weezevent** | Sync billetterie → audience_estimate automatique | Moyen | P2 |
+| **F.U13.4 - Intégration fédérations** | API FFHB/FFVB/FFBB pour scores automatiques | Moyen | P2 |
+| **F.U13.5 - Social media feed** | Afficher tweets/posts hashtag club sur TV | Moyen | P3 |
+
+**Information non disponible** : Spécifications APIs externes (Weezevent, fédérations).
 
 ---
 
