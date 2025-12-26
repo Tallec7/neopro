@@ -2,9 +2,35 @@
 
 > **Date** : 26 décembre 2025
 > **Auteur** : Audit Product Strategy
-> **Version** : 1.1
+> **Version** : 1.2
 > **Statut** : Analyse complète basée sur le code source
-> **Alignement** : Business Plan v1.6 (26 décembre 2025)
+> **Alignement** : Business Plan v1.6 + Implémentations Dec 25-26
+
+---
+
+## Changelog v1.2
+
+> **MAJEUR** : Réévaluation complète des gaps suite aux implémentations du 25-26 décembre 2025
+
+| Section | Modification |
+|---------|--------------|
+| Phase 0 | Ajout **capacités multi-tenant** implémentées |
+| Phase 1 | **L3 Alerting** : email notifications FAIT, objectifs/SMS restent |
+| Phase 1 | **L4 Accès sponsor** : portail lecture seule FAIT, gestion reste |
+| Phase 3 | **Refonte complète** : distinction FAIT vs VRAIMENT MANQUANT |
+| Phase 3 | Clarification **Deployment scheduler ≠ Playlist scheduler** |
+| Phase 4 | Mise à jour roadmap avec **Quick Wins déjà réalisés** |
+| Synthèse | Nouvelles priorités P0 (score overlay seul) |
+
+### Implémentations détectées (25-26 déc.)
+
+| Feature | Fichiers | Impact |
+|---------|----------|--------|
+| Portail Sponsor (lecture) | `sponsor-portal.controller.ts` | L4 partiellement résolu |
+| Portail Agence (lecture) | `agency.controller.ts` | Nouveau portail |
+| Notifications email | `email.service.ts` | L3 partiellement résolu |
+| Deployment scheduling | `scheduler.service.ts` | ≠ Playlist scheduling |
+| Rôles sponsor/agency | `types/index.ts`, `auth.ts` | Multi-tenant résolu |
 
 ---
 
@@ -142,17 +168,29 @@ NEOPRO se positionne comme le **premier réseau publicitaire sportif amateur en 
 
 ## 3. Limites fonctionnelles actuelles observables
 
+> **v1.2** : Mise à jour suite aux implémentations du 25-26 décembre 2025
+
 ### Limites techniques
 
-| Limite | Evidence dans le code | Impact |
-|--------|----------------------|--------|
-| **Pas de planification horaire** | Aucune table `schedules`, feature "Mode Programmation" en pause (BACKLOG.md) | Les clubs doivent déclencher manuellement les vidéos |
-| **Analytics sans audience réelle** | `audience_estimate` (estimation manuelle), pas d'intégration billetterie | ROI sponsors approximatif |
-| **Pas de multi-tenant sponsor** | Sponsors créés par admins, pas d'accès self-service | Dépendance au club pour rapports |
-| **Score manuel uniquement** | Saisie manuelle depuis télécommande, pas d'API fédérations | Friction opérationnelle |
-| **Pas d'alertes proactives** | Table `alerts` existe mais pas de notifications email/SMS | Détection tardive des problèmes |
-| **Pas de benchmarking** | Données par club isolées | Pas de comparaison inter-clubs |
-| **Overlay score incomplet** | UI télécommande terminée, overlay TV non implémenté | Feature premium incomplète |
+| Limite | Evidence dans le code | Impact | Statut v1.2 |
+|--------|----------------------|--------|-------------|
+| **Pas de planification horaire playlists** | Aucune table `schedules` pour playlists horaires | Les clubs doivent déclencher manuellement les vidéos | ❌ Reste |
+| **Analytics sans audience réelle** | `audience_estimate` (estimation manuelle), pas d'intégration billetterie | ROI sponsors approximatif | ❌ Reste |
+| ~~**Pas de multi-tenant sponsor**~~ | ~~Sponsors créés par admins~~ | ~~Dépendance au club pour rapports~~ | ✅ **FAIT** (portail lecture) |
+| **Score manuel uniquement** | Saisie manuelle depuis télécommande, pas d'API fédérations | Friction opérationnelle | ❌ Reste |
+| ~~**Pas d'alertes proactives**~~ | ~~Table `alerts` existe mais pas de notifications~~ | ~~Détection tardive~~ | ✅ **FAIT** (email) |
+| **Pas de benchmarking** | Données par club isolées | Pas de comparaison inter-clubs | ❌ Reste |
+| **Overlay score incomplet** | UI télécommande terminée, overlay TV non implémenté | Feature premium incomplète | ❌ Reste |
+
+### Nouvelles capacités multi-tenant (Dec 2025)
+
+| Capacité | Description | Fichiers |
+|----------|-------------|----------|
+| **Portail Sponsor** | Dashboard, vidéos, sites, stats (lecture seule) | `sponsor-portal.controller.ts` |
+| **Portail Agence** | Dashboard clubs gérés, alertes, stats | `agency.controller.ts` |
+| **Rôles étendus** | `sponsor`, `agency` en plus de admin/operator/viewer | `types/index.ts` |
+| **Notifications Email** | Alertes, déploiements, rapports | `email.service.ts` |
+| **Deployment Scheduling** | Programmer déploiement contenu à date future | `scheduler.service.ts` |
 
 ### Limites UX
 
@@ -262,23 +300,49 @@ NEOPRO se positionne comme le **premier réseau publicitaire sportif amateur en 
 
 ### Usage latent L3 : Alerting proactif et objectifs
 
+> **v1.2** : PARTIELLEMENT RÉSOLU - Notifications email implémentées
+
 | Aspect | Détail |
 |--------|--------|
-| **Statut** | Infrastructure présente, notifications absentes |
-| **Evidence** | Table `alerts` existe, `alert.service.ts` présent, mais pas de canaux notification (email/SMS) |
-| **Frein actuel** | Pas de notifications push, pas d'objectifs configurables |
-| **Potentiel** | Réduction churn, engagement proactif |
-| **Justification** | "Objectifs & Alertes" en P2 dans le backlog avec email/SMS/webhook prévus |
+| **Statut** | ✅ Email FAIT / ❌ Objectifs & SMS restent |
+| **Evidence v1.2** | `email.service.ts` : alertes critiques/warning, déploiements, rapports |
+| **Frein résiduel** | Pas de SMS, pas d'objectifs configurables (ex: 40h écran/mois) |
+| **Potentiel restant** | Objectifs = gamification + engagement proactif |
+| **Justification** | Email = quick win fait, SMS/Objectifs = P1-P2 |
+
+**Ce qui est FAIT (Dec 2025):**
+- ✅ `sendAlertNotification()` - critical/warning/info avec templates HTML
+- ✅ `sendDeploymentNotification()` - started/completed/failed
+- ✅ `sendSummaryReport()` - rapport périodique
+
+**Ce qui reste à faire:**
+- ❌ Notifications SMS (Twilio)
+- ❌ Objectifs configurables par club
+- ❌ Scheduling automatique des rapports périodiques
 
 ### Usage latent L4 : Accès sponsor self-service
 
+> **v1.2** : PARTIELLEMENT RÉSOLU - Portail lecture seule implémenté
+
 | Aspect | Détail |
 |--------|--------|
-| **Statut** | Suggéré mais non implémenté |
-| **Evidence** | Sponsors gérés uniquement par admins/operators, portail sponsor prévu en P3 (BACKLOG.md) |
-| **Frein actuel** | Dépendance au club pour chaque rapport |
-| **Potentiel** | Autonomie sponsor, réduction charge opérationnelle |
-| **Justification** | Tables `sponsor_users`, `sponsor_access_logs` prévues dans le backlog |
+| **Statut** | ✅ Consultation FAIT / ❌ Gestion reste |
+| **Evidence v1.2** | `sponsor-portal.controller.ts` : dashboard, sites, vidéos, stats |
+| **Frein résiduel** | Sponsors ne peuvent pas uploader créas, pas de facturation |
+| **Potentiel restant** | Autonomie complète = scale annonceurs |
+| **Justification** | Lecture = quick win fait, Écriture = Phase U1 complète |
+
+**Ce qui est FAIT (Dec 2025):**
+- ✅ `GET /api/sponsor/dashboard` - KPIs 30 jours, tendances 7 jours
+- ✅ `GET /api/sponsor/sites` - sites de diffusion avec contrats
+- ✅ `GET /api/sponsor/videos` - vidéos avec stats impressions
+- ✅ `GET /api/sponsor/stats` - stats détaillées par période
+
+**Ce qui reste à faire:**
+- ❌ Upload créas publicitaires
+- ❌ Gestion campagnes (start/stop/pause)
+- ❌ Facturation automatisée par impressions
+- ❌ Rotation intelligente des créas
 
 ### Usage latent L5 : Benchmarking inter-clubs
 
@@ -512,21 +576,36 @@ CLUBS reçoivent 10% (€25/mois × 6 annonceurs = €1,800/an passifs)
 
 ## Pour U1 : Réseau publicitaire annonceurs
 
+> **v1.2** : Analyse révisée post-implémentations Dec 2025
+
 ### Fonctionnalités existantes contributives
 - ✅ Groupes géographiques (`groups` avec type='geography')
 - ✅ Sponsor analytics (`sponsor_impressions`, `sponsor-analytics.service.ts`)
 - ✅ Déploiement par groupe (`content_deployments` avec `target_type='group'`)
 - ✅ Rapports PDF (`pdf-report.service.ts`)
+- ✅ **[NOUVEAU]** Portail sponsor lecture (`sponsor-portal.controller.ts`)
+- ✅ **[NOUVEAU]** Rôle `sponsor` avec isolation JWT (`auth.ts`)
+- ✅ **[NOUVEAU]** Dashboard consolidé multi-clubs (stats 30j agrégées)
 
-### Fonctionnalités complémentaires suggérées (nouvel usage)
+### Matrice FAIT vs RESTE (v1.2)
 
-| Fonctionnalité | Description | Effort |
-|----------------|-------------|--------|
-| **F1.1 - Portail annonceur self-service** | Interface dédiée pour annonceurs (upload créas, analytics, facturation) | Élevé |
-| **F1.2 - Dashboard consolidé multi-clubs** | Vue agrégée des performances sur tous les clubs du réseau | Moyen |
-| **F1.3 - Facturation automatisée** | Calcul et facturation basée sur les impressions réelles | Élevé |
-| **F1.4 - Rôle annonceur** | Nouveau rôle avec accès limité à ses campagnes uniquement | Moyen |
-| **F1.5 - Rotation intelligente** | Algorithme de distribution équitable des créas (max 3/club) | Moyen |
+| Fonctionnalité | v1.1 | v1.2 | Détail |
+|----------------|------|------|--------|
+| **F1.1 - Portail annonceur** | ❌ Manquant | ⚠️ **PARTIEL** | Lecture ✅ / Écriture ❌ |
+| **F1.2 - Dashboard consolidé** | ❌ Manquant | ✅ **FAIT** | `getSponsorDashboard()` |
+| **F1.3 - Facturation auto** | ❌ Manquant | ❌ **RESTE** | Prioritaire pour scale |
+| **F1.4 - Rôle annonceur** | ❌ Manquant | ✅ **FAIT** | `sponsor` dans UserRole |
+| **F1.5 - Rotation intelligente** | ❌ Manquant | ❌ **RESTE** | Max 3 créas/club |
+
+### Gaps RÉELS restants pour U1
+
+| Fonctionnalité | Description | Effort | Priorité |
+|----------------|-------------|--------|----------|
+| **F1.1b - Upload créas annonceur** | Permettre aux sponsors d'uploader leurs vidéos | Moyen | **P1** |
+| **F1.1c - Gestion campagnes** | Start/pause/stop campagnes, targeting géo | Moyen | **P2** |
+| **F1.3 - Facturation par impressions** | Calcul automatique basé sur `sponsor_impressions` | Élevé | **P1** |
+| **F1.5 - Rotation équitable** | Distribution fair-share des créas (max 3/club) | Moyen | **P2** |
+| **F1.6 - Contrats et devis** | Génération devis, gestion contrats | Moyen | **P2** |
 
 ---
 
@@ -603,36 +682,93 @@ CLUBS reçoivent 10% (€25/mois × 6 annonceurs = €1,800/an passifs)
 
 ## Pour Usage latent L2 : Programmation playlists
 
+> **v1.2** : CLARIFICATION IMPORTANTE
+>
+> ⚠️ **Deployment Scheduling ≠ Playlist Scheduling**
+> - `scheduler.service.ts` = programmer un **déploiement de contenu** pour une date future
+> - Playlist scheduling = programmer **ce qui joue à quelle heure** (ex: sponsors 14h-16h)
+
 ### Fonctionnalités existantes contributives
 - ✅ Phases temporelles (before/during/after)
 - ✅ Catégories de contenu
+- ✅ **[NOUVEAU]** Deployment scheduling (`scheduler.service.ts`) - **mais ≠ playlist**
 
-### Fonctionnalités complémentaires suggérées (nouvel usage)
+### Ce qui est FAIT (Dec 2025) - Deployment Scheduling
 
-| Fonctionnalité | Description | Effort |
-|----------------|-------------|--------|
-| **F.L2.1 - Scheduler** | Programmation horaire (ex: sponsors de 14h à 16h) | Moyen |
-| **F.L2.2 - Triggers événementiels** | Déclenchement auto sur phase de match | Moyen |
-| **F.L2.3 - Templates de programmation** | Modèles réutilisables (jour de match type) | Faible |
-| **F.L2.4 - Calendrier intégré** | Connexion au calendrier des matchs du club | Moyen |
+```typescript
+// scheduler.service.ts - Ce qui EXISTE
+scheduleContentDeployment(deploymentId, scheduledAt, scheduledBy)  // ✅ FAIT
+cancelScheduledDeployment(deploymentId, type)                       // ✅ FAIT
+getUpcomingScheduledDeployments(limit)                              // ✅ FAIT
+```
+
+**Cas d'usage couvert :** "Déployer cette vidéo sur les clubs le 15 janvier à 8h"
+
+### Ce qui RESTE à faire - Playlist Scheduling
+
+| Fonctionnalité | Description | Effort | Statut |
+|----------------|-------------|--------|--------|
+| **F.L2.1 - Scheduler playlists** | "Sponsors de 14h à 16h, jingles de 18h à 20h" | Moyen | ❌ **RESTE** |
+| **F.L2.2 - Triggers événementiels** | Auto-switch sur phase match (avant → pendant) | Moyen | ❌ **RESTE** |
+| **F.L2.3 - Templates programmation** | Modèles "jour de match", "entraînement" | Faible | ❌ **RESTE** |
+| **F.L2.4 - Calendrier matchs** | Sync calendrier fédération/club | Moyen | ❌ **RESTE** |
+
+### Différence conceptuelle
+
+```
+DEPLOYMENT SCHEDULING (✅ FAIT)          PLAYLIST SCHEDULING (❌ RESTE)
+─────────────────────────────           ──────────────────────────────
+"Quand déployer le contenu?"            "Quand jouer le contenu?"
+
+Contenu A ──[déployer]──> Club          Contenu A ──[jouer 14h-16h]──> TV
+           à date future                Contenu B ──[jouer 16h-18h]──> TV
+                                        Contenu C ──[jouer si match]──> TV
+```
 
 ---
 
 ## Pour Usage latent L3 : Alerting proactif
 
+> **v1.2** : Notifications email IMPLÉMENTÉES
+
 ### Fonctionnalités existantes contributives
 - ✅ Table `alerts`
 - ✅ Service `alert.service.ts`
 - ✅ Métriques de santé
+- ✅ **[NOUVEAU]** `email.service.ts` avec templates HTML
 
-### Fonctionnalités complémentaires suggérées (nouvel usage)
+### Ce qui est FAIT (Dec 2025) - Email Notifications
 
-| Fonctionnalité | Description | Effort |
-|----------------|-------------|--------|
-| **F.L3.1 - Notifications email** | Envoi emails sur alertes critiques | Faible |
-| **F.L3.2 - Notifications SMS** | Alertes SMS (Twilio) | Faible |
-| **F.L3.3 - Objectifs configurables** | Définir cibles (ex: 40h écran/mois) | Moyen |
-| **F.L3.4 - Rapports automatiques** | Envoi mensuel automatique des PDF | Faible |
+```typescript
+// email.service.ts - Ce qui EXISTE
+sendAlertNotification(to, { siteName, alertType, severity, message })  // ✅ FAIT
+sendDeploymentNotification(to, { siteName, videoName, status })        // ✅ FAIT
+sendSummaryReport(to, { period, totalSites, alertsCount, ... })        // ✅ FAIT
+```
+
+**Capacités implémentées :**
+- Alertes par sévérité (critical 🔴, warning 🟠, info ℹ️)
+- Templates HTML professionnels avec branding NeoPro
+- Rate limiting (5 emails/sec)
+- Pool de connexions SMTP
+
+### Matrice FAIT vs RESTE (v1.2)
+
+| Fonctionnalité | v1.1 | v1.2 | Détail |
+|----------------|------|------|--------|
+| **F.L3.1 - Notifications email** | ❌ Manquant | ✅ **FAIT** | `sendAlertNotification()` |
+| **F.L3.2 - Notifications SMS** | ❌ Manquant | ❌ **RESTE** | Twilio non intégré |
+| **F.L3.3 - Objectifs configurables** | ❌ Manquant | ❌ **RESTE** | Table `club_objectives` |
+| **F.L3.4 - Rapports automatiques** | ❌ Manquant | ⚠️ **PARTIEL** | Template ✅, cron ❌ |
+
+### Gaps RÉELS restants pour L3
+
+| Fonctionnalité | Description | Effort | Priorité |
+|----------------|-------------|--------|----------|
+| **F.L3.2 - SMS Twilio** | Alertes critiques par SMS (fallback) | Faible | P2 |
+| **F.L3.3 - Objectifs club** | Config objectifs (40h/mois, 100 impressions/j) | Moyen | **P1** |
+| **F.L3.4b - Cron rapports** | Scheduling envoi rapports hebdo/mensuels | Faible | **P1** |
+| **F.L3.5 - Webhooks** | Intégration Slack/Discord/Teams | Faible | P2 |
 
 ---
 
@@ -676,33 +812,45 @@ CLUBS reçoivent 10% (€25/mois × 6 annonceurs = €1,800/an passifs)
 
 ## Vue d'ensemble
 
+> **v1.2** : Roadmap révisée post-implémentations Dec 2025
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           ROADMAP NEOPRO 2026                                │
-│                    Alignée BP v1.6 + Seuils Réseau                           │
+│                        ROADMAP NEOPRO 2026 (v1.2)                            │
+│              Alignée BP v1.6 + Implémentations Dec 2025                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ COURT TERME (0-3 mois)          │ MOYEN TERME (3-6 mois)                    │
-│ Objectif: 15 clubs (S1)         │ Objectif: 30 clubs (S2)                   │
-│ ─────────────────────────       │ ──────────────────────                    │
-│ • Overlay score TV (P0)         │ • Scheduler playlists (P1)               │
-│ • Notifications email (P0)      │ • Benchmarking anonymisé (P1)            │
-│ • Rapports auto email (P0)      │ • Objectifs & alertes (P1)               │
-│ • Objectifs simples (P1)        │ • Intégration score FFHB (P1)            │
-│ • Templates programmation (P1)  │ • Mode spectateur MVP (P2)               │
-│ • [S1] Lancement annonceurs     │ • [S2] Scale annonceurs régionaux        │
+│ ✅ FAIT (Dec 2025)              │ COURT TERME (0-3 mois)                     │
+│ ───────────────────             │ Objectif: 15 clubs (S1)                    │
+│ • Portail sponsor lecture       │ ─────────────────────────                  │
+│ • Portail agence lecture        │ • Overlay score TV (P0) ⭐                 │
+│ • Notifications email           │ • Cron rapports auto (P1)                  │
+│ • Deployment scheduling         │ • Objectifs clubs (P1)                     │
+│ • Rôles sponsor/agency          │ • Templates programmation (P1)             │
+│ • Sécurité (CORS, JWT, auth)    │ • Upload créas sponsors (P1)               │
+│                                 │ • [S1] Lancement réseau annonceurs         │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ LONG TERME (6-12 mois)                                                       │
-│ Objectif: 100 clubs (S3)                                                     │
-│ ─────────────────────────────────────────────────────────────                │
-│ • Portail annonceur self-service (P2)                                        │
-│ • API OAuth partenaires (P2)                                                 │
-│ • A/B testing créas (P2)                                                     │
-│ • Multi-écrans / zones (P2)                                                  │
-│ • Intégration billetterie (P3)                                               │
-│ • [S3] Annonceurs nationaux                                                  │
-│ • Préparation DOOH (P3)                                                      │
+│ MOYEN TERME (3-6 mois)          │ LONG TERME (6-12 mois)                     │
+│ Objectif: 30 clubs (S2)         │ Objectif: 100 clubs (S3)                   │
+│ ──────────────────────          │ ─────────────────────────                  │
+│ • Scheduler playlists (P1)      │ • Facturation auto impressions (P2)       │
+│ • Benchmarking anonymisé (P1)   │ • API OAuth partenaires (P2)              │
+│ • Intégration score FFHB (P1)   │ • A/B testing créas (P2)                  │
+│ • Gestion campagnes sponsors    │ • Multi-écrans / zones (P2)               │
+│ • Mode spectateur MVP (P2)      │ • Intégration billetterie (P3)            │
+│ • [S2] Scale annonceurs régio.  │ • [S3] Annonceurs nationaux               │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Quick Wins déjà réalisés (Dec 2025)
+
+| Feature | Impact | Files |
+|---------|--------|-------|
+| ✅ Portail sponsor (lecture) | L4 partiel, U1 partiel | `sponsor-portal.controller.ts` |
+| ✅ Portail agence (lecture) | Nouveau segment | `agency.controller.ts` |
+| ✅ Notifications email | L3 partiel | `email.service.ts` |
+| ✅ Deployment scheduling | Automatisation | `scheduler.service.ts` |
+| ✅ Rôles sponsor/agency | Multi-tenant | `types/index.ts` |
+| ✅ Sécurité renforcée | Compliance | CORS, JWT cookies, auth |
 
 ---
 
@@ -710,18 +858,24 @@ CLUBS reçoivent 10% (€25/mois × 6 annonceurs = €1,800/an passifs)
 
 ### COURT TERME (0-3 mois)
 
-| ID | Fonctionnalité | Usage associé | Type | Priorité | Valeur principale | Effort |
-|----|----------------|---------------|------|----------|-------------------|--------|
-| **R1** | Overlay score TV | L1 - Score temps réel | Amélioration | **P0** | Rétention | Faible |
-| **R2** | Notifications email alertes | L3 - Alerting | Amélioration | **P0** | Réduction friction | Faible |
-| **R3** | Envoi rapports PDF auto | L3 - Alerting | Amélioration | **P0** | Rétention | Faible |
-| **R4** | Objectifs temps d'écran simples | L3 - Alerting | Extension | **P1** | Rétention | Moyen |
-| **R5** | Templates de programmation | L2 - Programmation | Amélioration | **P1** | Adoption | Faible |
+> **v1.2** : Roadmap révisée - plusieurs P0 déjà réalisés
 
-**Justification P0 :**
-- R1 : Feature premium promise, différenciation, code largement prêt
-- R2 : Quick win, infrastructure `alerts` existe, réduit churn
-- R3 : Demande récurrente présumée, valorise les analytics existants
+| ID | Fonctionnalité | Usage associé | Type | Priorité | Valeur principale | Effort | **Statut v1.2** |
+|----|----------------|---------------|------|----------|-------------------|--------|-----------------|
+| **R1** | Overlay score TV | L1 - Score temps réel | Amélioration | **P0** | Rétention | Faible | ❌ **RESTE** |
+| ~~**R2**~~ | ~~Notifications email alertes~~ | ~~L3 - Alerting~~ | ~~Amélioration~~ | ~~P0~~ | ~~Réduction friction~~ | ~~Faible~~ | ✅ **FAIT** |
+| **R3** | Cron rapports PDF auto | L3 - Alerting | Amélioration | **P1** | Rétention | Faible | ⚠️ Template fait |
+| **R4** | Objectifs temps d'écran clubs | L3 - Alerting | Extension | **P1** | Rétention | Moyen | ❌ **RESTE** |
+| **R5** | Templates de programmation | L2 - Programmation | Amélioration | **P1** | Adoption | Faible | ❌ **RESTE** |
+| **R5b** | Upload créas sponsors | U1 - Annonceurs | Extension | **P1** | Scale annonceurs | Moyen | ❌ **NOUVEAU** |
+
+**Justification P0 unique (v1.2) :**
+- R1 : **SEUL P0 restant** - Feature premium promise, différenciation, UI télécommande prête
+- R2 : ✅ FAIT (`email.service.ts` avec templates HTML)
+- R3 : Template `sendSummaryReport()` fait, manque le cron scheduling
+
+**Nouvelle priorité P1 :**
+- R5b : Upload créas sponsors = enabler pour scale annonceurs (Seuil S1)
 
 ---
 
@@ -778,40 +932,52 @@ IMPACT   ├──────────┼───────────�
 
 # Synthèse exécutive
 
+> **v1.2** : Synthèse révisée post-implémentations Dec 2025
+
 ## 1. Synthèse des usages actuels
 
 NEOPRO est une **two-sided marketplace** positionnée comme le **premier réseau publicitaire sportif amateur en France** :
 
-| Usage | Maturité | Couverture |
-|-------|----------|------------|
-| Diffusion sponsors locaux | ⭐⭐⭐⭐ | Complète |
-| Animation matchs | ⭐⭐⭐ | Fonctionnelle |
-| Monitoring parc d'écrans | ⭐⭐⭐⭐ | Complète |
-| Reporting sponsors | ⭐⭐⭐ | PDF manuels |
-| Déploiement contenu | ⭐⭐⭐⭐ | Complète + canary |
-| **Production vidéo** | ⭐⭐⭐ | Service proposé (BP v1.6) |
+| Usage | Maturité | Couverture | Évolution v1.2 |
+|-------|----------|------------|----------------|
+| Diffusion sponsors locaux | ⭐⭐⭐⭐ | Complète | = |
+| Animation matchs | ⭐⭐⭐ | Fonctionnelle | = |
+| Monitoring parc d'écrans | ⭐⭐⭐⭐ | Complète | +Alertes email |
+| Reporting sponsors | ⭐⭐⭐⭐ | PDF + portail lecture | **+Portail sponsor** |
+| Déploiement contenu | ⭐⭐⭐⭐⭐ | Complète + canary + scheduling | **+Scheduling** |
+| **Production vidéo** | ⭐⭐⭐ | Service proposé (BP v1.6) | = |
+| **Multi-tenant** | ⭐⭐⭐⭐ | Sponsors + Agences | **NOUVEAU** |
 
-**Points forts observés :**
+**Points forts observés (v1.2) :**
 - Architecture distribuée mature (Raspberry Pi + Cloud)
 - Stack technique moderne (Angular 20, Node.js, PostgreSQL)
 - Analytics sponsor différenciantes
 - Déploiement progressif (canary) rare dans ce marché
 - **Production vidéo intégrée** : différenciateur majeur (BP v1.6)
 - **Modèle two-sided** : clubs + annonceurs = 2 sources revenus
+- **[NOUVEAU]** Multi-tenant avec portails dédiés (sponsors, agences)
+- **[NOUVEAU]** Notifications email professionnelles
+- **[NOUVEAU]** Deployment scheduling
 
 ---
 
 ## 2. Usages latents identifiés
 
-| Usage latent | Maturité infra | Priorité suggérée |
-|--------------|----------------|-------------------|
-| L1 - Score automatique temps réel | 70% (UI prête) | **P0** |
-| L2 - Programmation playlists | 40% (phases existent) | **P1** |
-| L3 - Alerting proactif | 60% (tables prêtes) | **P0** |
-| L4 - Accès sponsor self-service | 20% (prévu backlog) | P2 |
-| L5 - Benchmarking inter-clubs | 50% (données agrégées) | **P1** |
-| L6 - A/B testing créas | 10% (prévu backlog) | P2 |
-| L7 - Intégration billetterie | 0% | P3 |
+> **v1.2** : Statut mis à jour après implémentations Dec 2025
+
+| Usage latent | Maturité v1.1 | Maturité v1.2 | Priorité | Statut |
+|--------------|---------------|---------------|----------|--------|
+| L1 - Score automatique temps réel | 70% | 70% | **P0** | ❌ Overlay reste |
+| L2 - Programmation playlists | 40% | 45% | **P1** | ⚠️ Deploy sched. ≠ Playlist sched. |
+| L3 - Alerting proactif | 60% | **85%** | P1 | ✅ Email fait, objectifs restent |
+| L4 - Accès sponsor self-service | 20% | **70%** | P1 | ✅ Lecture fait, écriture reste |
+| L5 - Benchmarking inter-clubs | 50% | 50% | **P1** | ❌ Reste |
+| L6 - A/B testing créas | 10% | 10% | P2 | ❌ Reste |
+| L7 - Intégration billetterie | 0% | 0% | P3 | ❌ Reste |
+
+**Évolutions clés v1.2 :**
+- L3 : +25% grâce à `email.service.ts`
+- L4 : +50% grâce à `sponsor-portal.controller.ts`
 
 ---
 
@@ -841,22 +1007,30 @@ NEOPRO est une **two-sided marketplace** positionnée comme le **premier réseau
 
 ## 4. Recommandations prioritaires
 
+> **v1.2** : Recommandations révisées - certaines déjà réalisées
+
+### ✅ FAIT (Dec 2025)
+- ~~Activer notifications email~~ → `email.service.ts` ✅
+- ~~Portail sponsor lecture seule~~ → `sponsor-portal.controller.ts` ✅
+- ~~Deployment scheduling~~ → `scheduler.service.ts` ✅
+- ~~Rôles multi-tenant~~ → sponsor/agency ✅
+
 ### Priorité 0 (immédiat - 0-1 mois)
-1. **Finaliser overlay score TV** - Code 90% prêt, feature premium bloquante
-2. **Activer notifications email** - Quick win, réduction churn significative
-3. **Automatiser envoi PDF mensuels** - Valorise le travail analytics existant
+1. **Finaliser overlay score TV** - **SEUL P0 restant**, UI télécommande prête, overlay manquant
 
 ### Priorité 1 (court terme - 1-3 mois) → Objectif S1 (15 clubs)
-4. **Implémenter objectifs simples** - Engagement proactif des clubs
-5. **Créer scheduler playlists** - Débloquer l'usage latent programmation
-6. **Lancer benchmarking anonymisé** - Différenciation + rétention
-7. **[S1] Préparer lancement réseau annonceurs** - Prospection Tier 1
+2. **Cron rapports PDF auto** - Template `sendSummaryReport()` fait, manque scheduling
+3. **Implémenter objectifs clubs** - Table `club_objectives`, seuils configurables
+4. **Upload créas sponsors** - Enabler pour scale annonceurs
+5. **Templates programmation playlists** - Modèles réutilisables jour de match
+6. **[S1] Lancement réseau annonceurs** - Prospection Tier 1 (15 clubs atteints)
 
 ### Priorité 2 (moyen terme - 3-6 mois) → Objectif S2 (30 clubs)
-8. **Intégrer API score FFHB** - Automatisation = montée en gamme premium
-9. **[S2] Onboarder 3-6 annonceurs régionaux** - Premiers revenus passifs clubs
-10. **Développer portail annonceur MVP** - Self-service simplifié
-11. **Préparer multi-écrans** - Expansion du panier moyen
+7. **Scheduler playlists horaires** - Programmer ce qui joue quand (≠ deployment)
+8. **Benchmarking anonymisé** - Comparaison inter-clubs
+9. **Gestion campagnes sponsors** - Start/pause/stop, targeting géo
+10. **Intégrer API score FFHB** - Automatisation = montée en gamme premium
+11. **[S2] Scale annonceurs régionaux** - 6+ annonceurs
 
 ---
 
@@ -874,41 +1048,72 @@ NEOPRO est une **two-sided marketplace** positionnée comme le **premier réseau
 
 ## 6. Conclusion
 
+> **v1.2** : Conclusion révisée post-implémentations Dec 2025
+
 NEOPRO dispose d'une **base technique solide** et d'un **positionnement stratégique différenciant** comme **premier réseau publicitaire sportif amateur en France**.
 
-### Constats clés
+### Constats clés (v1.2)
 
-| Dimension | Analyse |
-|-----------|---------|
-| **Modèle économique** | Two-sided marketplace validé (clubs + annonceurs) |
-| **TAM combiné** | €6,4M (€5,2M clubs + €1,2M annonceurs) |
-| **Différenciateur** | Production vidéo intégrée + analytics sponsors |
-| **Usages latents** | 7 identifiés, forte valeur de déblocage |
-| **Nouveaux usages** | 7 proposés, alignés BP v1.6 |
+| Dimension | Analyse | Évolution |
+|-----------|---------|-----------|
+| **Modèle économique** | Two-sided marketplace validé (clubs + annonceurs) | = |
+| **TAM combiné** | €6,4M (€5,2M clubs + €1,2M annonceurs) | = |
+| **Différenciateur** | Production vidéo intégrée + analytics sponsors | = |
+| **Usages latents** | 7 identifiés, **L3/L4 partiellement résolus** | ↗️ |
+| **Nouveaux usages** | 7 proposés, alignés BP v1.6 | = |
+| **Multi-tenant** | Portails sponsor/agence opérationnels | **NOUVEAU** |
 
-### Focus stratégique 2026
+### Avancées Dec 2025
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    OBJECTIFS CLÉS 2026                           │
+│                   IMPLÉMENTATIONS DEC 2025                       │
 ├─────────────────────────────────────────────────────────────────┤
-│  T1-T2: Atteindre S1 (15 clubs) → Lancer réseau annonceurs      │
-│  T3-T4: Atteindre S2 (30 clubs) → Scale annonceurs régionaux    │
+│  ✅ Portail sponsor (lecture) - Dashboard, vidéos, stats        │
+│  ✅ Portail agence (lecture) - Dashboard clubs, alertes         │
+│  ✅ Notifications email - Alertes, déploiements, rapports       │
+│  ✅ Deployment scheduling - Programmer déploiements             │
+│  ✅ Rôles sponsor/agency - JWT enrichi, isolation               │
+│  ✅ Sécurité renforcée - CORS, cookies HttpOnly, auth           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Focus stratégique 2026 (révisé)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    OBJECTIFS CLÉS 2026 (v1.2)                    │
+├─────────────────────────────────────────────────────────────────┤
+│  IMMÉDIAT: Overlay score TV (SEUL P0 restant)                   │
+│  T1-T2: S1 (15 clubs) → Upload créas, objectifs, cron rapports  │
+│  T3-T4: S2 (30 clubs) → Scheduler playlists, benchmarking       │
 │  ARR cible: €69K (€53K clubs + €16K annonceurs)                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Recommandations finales
+### Recommandations finales (v1.2)
 
-1. **Compléter features premium** : overlay score, notifications, rapports auto
-2. **Atteindre seuil S1** : 15 clubs = déclencheur réseau annonceurs
-3. **Activer côté 2 marketplace** : prospection annonceurs Tier 1 dès S1
-4. **Capitaliser sur production vidéo** : différenciateur commercial massue
-5. **Préparer scale** : multi-écrans, portail annonceur, API partenaires
+1. **~~Notifications email~~** ✅ FAIT - Focus sur overlay score TV (SEUL P0)
+2. **~~Portail sponsor~~** ✅ PARTIEL - Ajouter upload créas et gestion campagnes
+3. **Atteindre seuil S1** : 15 clubs = déclencheur réseau annonceurs
+4. **Compléter alerting** : Cron rapports + objectifs clubs (templates prêts)
+5. **Clarifier scheduling** : Deployment ≠ Playlist, implémenter playlist scheduler
+6. **Capitaliser sur production vidéo** : différenciateur commercial massue
 
-La plateforme est **bien positionnée** pour évoluer d'un outil de diffusion vers une **marketplace d'engagement sportif complète** avec deux sources de revenus récurrents.
+### Matrice de maturité finale (v1.2)
+
+| Composant | v1.1 | v1.2 | Gap restant |
+|-----------|------|------|-------------|
+| **Core Platform** | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | - |
+| **Multi-tenant** | ⭐⭐ | ⭐⭐⭐⭐ | Upload créas |
+| **Alerting** | ⭐⭐ | ⭐⭐⭐⭐ | Objectifs, SMS |
+| **Score Live** | ⭐⭐⭐ | ⭐⭐⭐ | Overlay TV |
+| **Programmation** | ⭐⭐ | ⭐⭐ | Playlist scheduler |
+| **Analytics** | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Benchmarking |
+
+La plateforme est **bien positionnée** et **a significativement progressé** en décembre 2025. Elle peut désormais évoluer d'un outil de diffusion vers une **marketplace d'engagement sportif complète** avec deux sources de revenus récurrents.
 
 ---
 
 *Document mis à jour le 26 décembre 2025*
-*Basé sur l'analyse du code source et aligné avec Business Plan v1.6*
+*Version 1.2 - Aligné avec Business Plan v1.6 + Implémentations Dec 2025*
