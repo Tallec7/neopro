@@ -3,15 +3,18 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subscription } from 'rxjs';
+import { TranslateModule } from '@ngx-translate/core';
 import { AuthService } from '../../core/services/auth.service';
 import { SocketService } from '../../core/services/socket.service';
 import { NotificationService } from '../../core/services/notification.service';
+import { TranslationService } from '../../core/services/translation.service';
 import { User } from '../../core/models';
+import { LanguageSelectorComponent } from '../../shared/components/language-selector/language-selector.component';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, TranslateModule, LanguageSelectorComponent],
   animations: [
     trigger('slideIn', [
       transition(':enter', [
@@ -24,81 +27,107 @@ import { User } from '../../core/models';
     ])
   ],
   template: `
+    <!-- Skip link pour navigation clavier -->
+    <a href="#main-content" class="skip-link">{{ 'nav.skipToContent' | translate }}</a>
+
     <div class="layout">
-      <aside class="sidebar">
+      <aside class="sidebar" role="complementary" [attr.aria-label]="'nav.dashboard' | translate">
         <div class="sidebar-header">
-          <img src="assets/neopro-logo-white.png" alt="Neopro" class="sidebar-logo" />
-          <span class="connection-status" [class.connected]="isConnected">
-            <span class="status-dot"></span>
-            {{ isConnected ? 'Connecté' : 'Déconnecté' }}
+          <img src="assets/neopro-logo-white.png" alt="Neopro Dashboard Central" class="sidebar-logo" />
+          <span
+            class="connection-status"
+            [class.connected]="isConnected"
+            role="status"
+            [attr.aria-label]="isConnected ? ('status.connected' | translate) : ('status.disconnected' | translate)"
+          >
+            <span class="status-dot" aria-hidden="true"></span>
+            {{ isConnected ? ('status.connected' | translate) : ('status.disconnected' | translate) }}
           </span>
         </div>
 
-        <nav class="sidebar-nav">
-          <a routerLink="/dashboard" routerLinkActive="active" class="nav-item">
-            <span class="icon">📊</span>
-            <span>Dashboard</span>
+        <nav class="sidebar-nav" [attr.aria-label]="'nav.dashboard' | translate">
+          <a routerLink="/dashboard" routerLinkActive="active" class="nav-item" [attr.aria-label]="'nav.dashboard' | translate">
+            <span class="icon" aria-hidden="true">📊</span>
+            <span>{{ 'nav.dashboard' | translate }}</span>
           </a>
-          <a routerLink="/sites" routerLinkActive="active" class="nav-item">
-            <span class="icon">🖥️</span>
-            <span>Sites</span>
+          <a routerLink="/sites" routerLinkActive="active" class="nav-item" [attr.aria-label]="'nav.sites' | translate">
+            <span class="icon" aria-hidden="true">🖥️</span>
+            <span>{{ 'nav.sites' | translate }}</span>
           </a>
-          <a routerLink="/groups" routerLinkActive="active" class="nav-item">
-            <span class="icon">👥</span>
-            <span>Groupes</span>
+          <a routerLink="/groups" routerLinkActive="active" class="nav-item" [attr.aria-label]="'nav.groups' | translate">
+            <span class="icon" aria-hidden="true">👥</span>
+            <span>{{ 'nav.groups' | translate }}</span>
           </a>
-          <a routerLink="/sponsors" routerLinkActive="active" class="nav-item">
-            <span class="icon">💼</span>
-            <span>Sponsors</span>
+          <a routerLink="/sponsors" routerLinkActive="active" class="nav-item" [attr.aria-label]="'nav.sponsors' | translate">
+            <span class="icon" aria-hidden="true">💼</span>
+            <span>{{ 'nav.sponsors' | translate }}</span>
           </a>
-          <a routerLink="/content" routerLinkActive="active" class="nav-item" *ngIf="canManageContent()">
-            <span class="icon">📹</span>
-            <span>Contenu</span>
+          <a routerLink="/content" routerLinkActive="active" class="nav-item" *ngIf="canManageContent()" [attr.aria-label]="'nav.content' | translate">
+            <span class="icon" aria-hidden="true">📹</span>
+            <span>{{ 'nav.content' | translate }}</span>
           </a>
-          <a routerLink="/updates" routerLinkActive="active" class="nav-item" *ngIf="canManageContent()">
-            <span class="icon">🔄</span>
-            <span>Mises à jour</span>
+          <a routerLink="/updates" routerLinkActive="active" class="nav-item" *ngIf="canManageContent()" [attr.aria-label]="'nav.updates' | translate">
+            <span class="icon" aria-hidden="true">🔄</span>
+            <span>{{ 'nav.updates' | translate }}</span>
           </a>
-          <a routerLink="/analytics" routerLinkActive="active" class="nav-item" *ngIf="canManageContent()">
-            <span class="icon">📈</span>
-            <span>Analytics</span>
+          <a routerLink="/analytics" routerLinkActive="active" class="nav-item" *ngIf="canManageContent()" [attr.aria-label]="'nav.analytics' | translate">
+            <span class="icon" aria-hidden="true">📈</span>
+            <span>{{ 'nav.analytics' | translate }}</span>
           </a>
 
-          <div class="nav-section" *ngIf="isAdmin()">
-            <div class="nav-section-title">Administration</div>
-            <a routerLink="/admin/analytics-categories" routerLinkActive="active" class="nav-item">
-              <span class="icon">🏷️</span>
-              <span>Catégories Analytics</span>
+          <div class="nav-section" *ngIf="isAdmin()" role="group" [attr.aria-label]="'nav.administration' | translate">
+            <div class="nav-section-title" id="admin-section">{{ 'nav.administration' | translate }}</div>
+            <a routerLink="/admin/analytics-categories" routerLinkActive="active" class="nav-item" aria-describedby="admin-section" [attr.aria-label]="'nav.analyticsCategories' | translate">
+              <span class="icon" aria-hidden="true">🏷️</span>
+              <span>{{ 'nav.analyticsCategories' | translate }}</span>
             </a>
-            <a routerLink="/admin/local" routerLinkActive="active" class="nav-item">
-              <span class="icon">🛠️</span>
-              <span>Console locale</span>
+            <a routerLink="/admin/local" routerLinkActive="active" class="nav-item" aria-describedby="admin-section" [attr.aria-label]="'nav.localConsole' | translate">
+              <span class="icon" aria-hidden="true">🛠️</span>
+              <span>{{ 'nav.localConsole' | translate }}</span>
             </a>
           </div>
         </nav>
 
-        <div class="sidebar-footer">
+        <div class="sidebar-footer" role="contentinfo">
+          <app-language-selector></app-language-selector>
           <div class="user-info">
-            <div class="user-avatar">{{ getUserInitials() }}</div>
+            <div class="user-avatar" aria-hidden="true">{{ getUserInitials() }}</div>
             <div class="user-details">
               <div class="user-name">{{ currentUser?.full_name || currentUser?.email }}</div>
               <div class="user-role">{{ getRoleLabel() }}</div>
             </div>
           </div>
-          <button class="btn-logout" (click)="logout()" title="Déconnexion">
-            <span>🚪</span>
+          <button
+            class="btn-logout"
+            (click)="logout()"
+            [attr.aria-label]="'auth.logout' | translate"
+            [title]="'auth.logout' | translate"
+          >
+            <span aria-hidden="true">🚪</span>
           </button>
         </div>
       </aside>
 
-      <main class="main-content">
-        <div class="notifications" *ngIf="notifications.length > 0">
-          <div *ngFor="let notification of notifications"
-               [class]="'notification notification-' + notification.type"
-               [@slideIn]>
-            <span class="notification-icon">{{ getNotificationIcon(notification.type) }}</span>
+      <main id="main-content" class="main-content" role="main">
+        <div
+          class="notifications"
+          *ngIf="notifications.length > 0"
+          role="region"
+          aria-live="polite"
+        >
+          <div
+            *ngFor="let notification of notifications; trackBy: trackNotification"
+            [class]="'notification notification-' + notification.type"
+            role="alert"
+            [@slideIn]
+          >
+            <span class="notification-icon" aria-hidden="true">{{ getNotificationIcon(notification.type) }}</span>
             <span class="notification-message">{{ notification.message }}</span>
-            <button class="notification-close" (click)="dismissNotification(notification)">×</button>
+            <button
+              class="notification-close"
+              (click)="dismissNotification(notification)"
+              [attr.aria-label]="'notifications.closeNotification' | translate"
+            >×</button>
           </div>
         </div>
 
@@ -352,12 +381,64 @@ import { User } from '../../core/models';
         justify-content: center;
       }
     }
+
+    /* WCAG AA Accessibility */
+    .skip-link {
+      position: absolute;
+      top: -100%;
+      left: 0;
+      background: var(--neo-hockey-dark, #2022E9);
+      color: white;
+      padding: 1rem;
+      z-index: 9999;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .skip-link:focus {
+      top: 0;
+    }
+
+    /* Focus visible styles pour navigation clavier */
+    .nav-item:focus-visible {
+      outline: 3px solid #fff;
+      outline-offset: -3px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-logout:focus-visible {
+      outline: 3px solid #fff;
+      outline-offset: 2px;
+    }
+
+    .notification-close:focus-visible {
+      outline: 2px solid var(--neo-hockey-dark, #2022E9);
+      outline-offset: 2px;
+    }
+
+    /* High contrast mode support */
+    @media (prefers-contrast: high) {
+      .nav-item.active {
+        border-left-width: 5px;
+      }
+      .status-dot {
+        border: 2px solid currentColor;
+      }
+    }
+
+    /* Reduced motion preference */
+    @media (prefers-reduced-motion: reduce) {
+      .status-dot {
+        animation: none;
+      }
+    }
   `]
 })
 export class LayoutComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly socketService = inject(SocketService);
   private readonly notificationService = inject(NotificationService);
+  private readonly translationService = inject(TranslationService);
   private readonly router = inject(Router);
 
   currentUser: User | null = null;
@@ -424,12 +505,8 @@ export class LayoutComponent implements OnInit, OnDestroy {
   }
 
   getRoleLabel(): string {
-    const roleLabels: Record<string, string> = {
-      admin: 'Administrateur',
-      operator: 'Opérateur',
-      viewer: 'Observateur'
-    };
-    return this.currentUser ? roleLabels[this.currentUser.role] : '';
+    if (!this.currentUser) return '';
+    return this.translationService.instant(`roles.${this.currentUser.role}`);
   }
 
   showNotification(type: string, message: string): void {
@@ -445,6 +522,10 @@ export class LayoutComponent implements OnInit, OnDestroy {
     this.notifications = this.notifications.filter(n => n.id !== notification.id);
   }
 
+  trackNotification(index: number, notification: {id: number; type: string; message: string}): number {
+    return notification.id;
+  }
+
   getNotificationIcon(type: string): string {
     const icons: Record<string, string> = {
       success: '✅',
@@ -456,7 +537,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
   }
 
   logout(): void {
-    if (confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
+    if (confirm(this.translationService.instant('auth.logoutConfirm'))) {
       this.authService.logout();
     }
   }

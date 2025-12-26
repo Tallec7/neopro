@@ -2,61 +2,91 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 import { AuthService } from '../../core/services/auth.service';
+import { TranslationService } from '../../core/services/translation.service';
+import { LanguageSelectorComponent } from '../../shared/components/language-selector/language-selector.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, TranslateModule, LanguageSelectorComponent],
   template: `
-    <div class="login-container">
-      <div class="login-card">
+    <div class="login-container" role="main">
+      <div class="language-corner">
+        <app-language-selector></app-language-selector>
+      </div>
+      <div class="login-card" role="region" aria-labelledby="login-title">
         <div class="login-header">
-          <img src="assets/neopro-logo.png" alt="Neopro" class="login-logo" />
-          <p>Dashboard Central</p>
+          <img src="assets/neopro-logo.png" alt="Logo Neopro" class="login-logo" />
+          <h1 id="login-title" class="visually-hidden">{{ 'auth.centralDashboard' | translate }}</h1>
+          <p>{{ 'auth.centralDashboard' | translate }}</p>
         </div>
 
-        <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+        <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" [attr.aria-label]="'auth.login' | translate">
           <div class="form-group">
-            <label for="email">Email</label>
+            <label for="email">{{ 'auth.email' | translate }}</label>
             <input
               id="email"
               type="email"
               formControlName="email"
               placeholder="admin@neopro.fr"
+              autocomplete="email"
+              [attr.aria-invalid]="loginForm.get('email')?.invalid && loginForm.get('email')?.touched"
+              [attr.aria-describedby]="loginForm.get('email')?.invalid && loginForm.get('email')?.touched ? 'email-error' : null"
               [class.error]="loginForm.get('email')?.invalid && loginForm.get('email')?.touched"
             />
-            <span class="error-message" *ngIf="loginForm.get('email')?.invalid && loginForm.get('email')?.touched">
-              Email requis
+            <span
+              id="email-error"
+              class="error-message"
+              role="alert"
+              *ngIf="loginForm.get('email')?.invalid && loginForm.get('email')?.touched"
+            >
+              {{ 'auth.emailRequired' | translate }}
             </span>
           </div>
 
           <div class="form-group">
-            <label for="password">Mot de passe</label>
+            <label for="password">{{ 'auth.password' | translate }}</label>
             <input
               id="password"
               type="password"
               formControlName="password"
               placeholder="••••••••"
+              autocomplete="current-password"
+              [attr.aria-invalid]="loginForm.get('password')?.invalid && loginForm.get('password')?.touched"
+              [attr.aria-describedby]="loginForm.get('password')?.invalid && loginForm.get('password')?.touched ? 'password-error' : null"
               [class.error]="loginForm.get('password')?.invalid && loginForm.get('password')?.touched"
             />
-            <span class="error-message" *ngIf="loginForm.get('password')?.invalid && loginForm.get('password')?.touched">
-              Mot de passe requis
+            <span
+              id="password-error"
+              class="error-message"
+              role="alert"
+              *ngIf="loginForm.get('password')?.invalid && loginForm.get('password')?.touched"
+            >
+              {{ 'auth.passwordRequired' | translate }}
             </span>
           </div>
 
-          <div class="error-alert" *ngIf="errorMessage">
-            <span>⚠️ {{ errorMessage }}</span>
+          <div class="error-alert" role="alert" aria-live="polite" *ngIf="errorMessage">
+            <span>{{ errorMessage }}</span>
           </div>
 
-          <button type="submit" class="btn btn-primary btn-block" [disabled]="loading || loginForm.invalid">
-            <span *ngIf="!loading">Se connecter</span>
-            <span *ngIf="loading" class="spinner-small"></span>
+          <button
+            type="submit"
+            class="btn btn-primary btn-block"
+            [disabled]="loading || loginForm.invalid"
+            [attr.aria-busy]="loading"
+            [attr.aria-label]="'auth.signIn' | translate"
+          >
+            <span *ngIf="!loading">{{ 'auth.signIn' | translate }}</span>
+            <span *ngIf="loading" class="spinner-small" aria-hidden="true"></span>
+            <span *ngIf="loading" class="visually-hidden">{{ 'auth.signingIn' | translate }}</span>
           </button>
         </form>
 
         <div class="login-footer">
-          <p>Version 1.0.0</p>
+          <p>{{ 'common.version' | translate }} 1.0.0</p>
         </div>
       </div>
     </div>
@@ -69,6 +99,13 @@ import { AuthService } from '../../core/services/auth.service';
       justify-content: center;
       background: linear-gradient(135deg, var(--neo-hockey-dark, #2022E9) 0%, var(--neo-purple-dark, #3A0686) 100%);
       padding: 2rem;
+      position: relative;
+    }
+
+    .language-corner {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
     }
 
     .login-card {
@@ -182,11 +219,54 @@ import { AuthService } from '../../core/services/auth.service';
       font-size: 0.875rem;
       margin: 0;
     }
+
+    /* WCAG AA Accessibility */
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* Focus visible pour navigation clavier */
+    .form-group input:focus-visible {
+      outline: 3px solid var(--neo-hockey-dark, #2022E9);
+      outline-offset: 2px;
+    }
+
+    .btn:focus-visible {
+      outline: 3px solid #fff;
+      outline-offset: 2px;
+      box-shadow: 0 0 0 6px var(--neo-hockey-dark, #2022E9);
+    }
+
+    /* High contrast mode support */
+    @media (prefers-contrast: high) {
+      .form-group input {
+        border-width: 3px;
+      }
+      .btn {
+        border: 2px solid currentColor;
+      }
+    }
+
+    /* Reduced motion preference */
+    @media (prefers-reduced-motion: reduce) {
+      .spinner-small {
+        animation: none;
+      }
+    }
   `]
 })
 export class LoginComponent {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
+  private readonly translationService = inject(TranslationService);
   private readonly router = inject(Router);
 
   loginForm: FormGroup;
@@ -219,7 +299,7 @@ export class LoginComponent {
       },
       error: (error) => {
         this.loading = false;
-        this.errorMessage = error.error?.error || 'Erreur de connexion. Veuillez réessayer.';
+        this.errorMessage = error.error?.error || this.translationService.instant('auth.loginError');
       }
     });
   }

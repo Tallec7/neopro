@@ -15,6 +15,7 @@ import pool from './config/database';
 import socketService from './services/socket.service';
 import metricsService from './services/metrics.service';
 import healthService from './services/health.service';
+import schedulerService from './services/scheduler.service';
 
 import authRoutes from './routes/auth.routes';
 import mfaRoutes from './routes/mfa.routes';
@@ -27,6 +28,8 @@ import sponsorAnalyticsRoutes from './routes/sponsor-analytics.routes';
 import auditRoutes from './routes/audit.routes';
 import canaryRoutes from './routes/canary.routes';
 import adminRoutes from './routes/admin.routes';
+import sponsorPortalRoutes from './routes/sponsor-portal.routes';
+import agencyRoutes from './routes/agency.routes';
 import { authRateLimit, apiRateLimit, sensitiveRateLimit } from './middleware/user-rate-limit';
 import { setRLSContext } from './middleware/rls-context';
 
@@ -43,10 +46,25 @@ const allowedOrigins =
     .map((origin) => normalizeOrigin(origin.trim()))
     .filter(Boolean) || [];
 
+// SECURITY: Fail-closed in production - reject all cross-origin requests if ALLOWED_ORIGINS not configured
+const isProduction = process.env.NODE_ENV === 'production';
+const corsFailClosed = isProduction && allowedOrigins.length === 0;
+
+if (corsFailClosed) {
+  logger.error('='.repeat(80));
+  logger.error('SECURITY WARNING: ALLOWED_ORIGINS not configured in production!');
+  logger.error('All cross-origin requests will be REJECTED.');
+  logger.error('Please set ALLOWED_ORIGINS environment variable (comma-separated list).');
+  logger.error('Example: ALLOWED_ORIGINS=https://dashboard.neopro.fr,https://admin.neopro.fr');
+  logger.error('='.repeat(80));
+}
+
 // Log configured origins at startup for debugging
 logger.info('CORS configuration', {
   allowedOrigins,
-  allowAllOrigins: allowedOrigins.length === 0,
+  isProduction,
+  corsFailClosed,
+  allowAllOrigins: !isProduction && allowedOrigins.length === 0,
 });
 
 const app = express();
@@ -68,7 +86,13 @@ const resolveOrigin = (origin?: string | undefined): string | null => {
 
   const normalizedOrigin = normalizeOrigin(origin);
 
-  // If no allowed origins configured, allow all
+  // SECURITY: In production, if no allowed origins configured, reject ALL origins
+  if (corsFailClosed) {
+    logger.warn('CORS request rejected (fail-closed mode)', { origin: normalizedOrigin });
+    return null;
+  }
+
+  // In development, if no allowed origins configured, allow all
   if (allowedOrigins.length === 0) {
     return normalizedOrigin;
   }
@@ -94,10 +118,12 @@ app.use((req, res, next) => {
     if (matchedOrigin) {
       allowedOrigin = matchedOrigin;
     }
-  } else if (allowedOrigins.length === 0) {
-    // No origin header and no restrictions → allow all
+  } else if (!corsFailClosed && allowedOrigins.length === 0) {
+    // No origin header and no restrictions (development only) → allow all
     allowedOrigin = '*';
   }
+  // Note: In production with corsFailClosed, requests without origin header are still allowed
+  // (same-origin requests, server-to-server requests, etc.)
 
   // Toujours définir les headers CORS si une origine est autorisée
   if (allowedOrigin) {
@@ -229,6 +255,8 @@ app.use('/api/analytics', apiRateLimit, sponsorAnalyticsRoutes); // Analytics sp
 app.use('/api/audit', apiRateLimit, auditRoutes);
 app.use('/api/canary', sensitiveRateLimit, canaryRoutes); // Déploiements canary - sensible
 app.use('/api/admin', sensitiveRateLimit, adminRoutes);
+app.use('/api/sponsor', apiRateLimit, sponsorPortalRoutes); // Portail sponsors
+app.use('/api/agencies', apiRateLimit, agencyRoutes); // Gestion agences
 
 // 404 handler - Skip Socket.IO paths as they are handled by Socket.IO server directly
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -280,6 +308,10 @@ const startServer = async () => {
     // Initialiser Socket.IO (avec Redis si configuré)
     await socketService.initialize(httpServer);
     logger.info('Socket.IO initialized', { redisEnabled: socketService.isRedisConnected() });
+
+    // Demarrer le scheduler pour les deploiements planifies
+    schedulerService.start();
+    logger.info('Deployment scheduler started');
   } catch (error) {
     logger.error('Failed to initialize dependencies:', error);
     // Ne pas quitter - le serveur reste en mode dégradé et le health check rapportera l'état
@@ -288,6 +320,7 @@ const startServer = async () => {
 
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM signal received: closing HTTP server');
+  schedulerService.stop();
   httpServer.close(async () => {
     logger.info('HTTP server closed');
     await socketService.cleanup();
